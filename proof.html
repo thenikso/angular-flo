@@ -1,0 +1,49 @@
+<html>
+<head>
+	<title>ngFlo</title>
+</head>
+<body ng-app="App" ng-controller="Ctrl">
+
+	<input type="text" ng-model="in">
+	<div>{{in}}</div>
+	<div>{{out}}</div>
+
+	<script src="bower_components/angular/angular.js"></script>
+	<script src="angular-flo.js"></script>
+	<script type="text/javascript">
+	angular.module('App', ['ngFlo', 'moar'])
+
+	.config(function($componentProvider) {
+		$componentProvider.register('mycomp', [{name:'in', type:'string'}], [{ name:'out', type:'string'}], function(i) {
+			if (!angular.isDefined(i)) return;
+			return {
+				out: i.toUpperCase()
+			};
+		});
+	})
+
+	.controller('Ctrl', function($scope, $component, $network) {
+		$component('mycomp')($scope);
+		// var c = $component('mycomp')($scope);
+		// console.log(c('asdf'));
+		$network('nope')
+			.process('nothing', 'othercomp')
+			.process('upme', 'mycomp')
+			.connection('nothing.out', 'upme.in')
+			.process('logthis', 'logger')
+			.connection('upme.out', 'logthis.in');
+	});
+
+	angular.module('moar', ['ngFlo']).config(function($componentProvider) {
+		$componentProvider
+		.register('othercomp', ['in'], ['out'], function(i) {
+			return i || "nothing";
+		})
+		.register('logger', ['in'], [], function(i) {
+			console.log(i);
+		});
+	});
+	</script>
+
+</body>
+</html>
