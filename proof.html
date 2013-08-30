@@ -29,9 +29,10 @@
 		$network('nope')
 			.process('nothing', 'othercomp')
 			.process('upme', 'mycomp')
-			.connection('nothing.out', 'upme.in')
+			.connection('["nothing"].out', 'upme.in')
 			.process('logthis', 'logger')
-			.connection('upme.out', 'logthis.in');
+			.connection('upme.out', 'logthis.in')
+			.constant('lol', 'nothing.in');
 	});
 
 	angular.module('moar', ['ngFlo']).config(function($componentProvider) {

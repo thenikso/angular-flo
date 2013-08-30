@@ -7,9 +7,96 @@ var flo = angular.module('ngFlo', []);
 flo.provider('$component', ['$injector', function($injector) {
 	var components = {};
 
+	// TODO make an $inhibit property that avoid computation, will be changed by network if there are output $connections?
+	// inhibit and only enable if $$watchers has out ports watchers? not possible...
+	function componentFactory(name, locals) {
+		var options = components[name];
+		if (!angular.isObject(options)) {
+			throw "$component: No component '" + name + "' found.";
+		}
+
+		// Get ins watcher expression
+		var insExp = buildInsExpression(options.ins);
+
+		// Build instantiable component
+		var transformer = options.transformer;
+		var instance = function(scope, portsAlias) {
+			// TODO use portsAlias to rename ports
+			if (angular.isFunction(options.compile)) {
+				// TODO throw if transformer is set
+				transformer = $injector.invoke(options.compile, options, locals);
+				// TODO throw if transformer is not a function
+			}
+			// Validate transformer outputs
+			function component() {
+				var ins = parseInput(options.ins, arguments);
+				var outs = transformer.apply(scope, ins); // todo should this be the scope? what when it $destroy?
+				return parseOutput(options.outs, outs);
+			};
+			// Apply wathers to scope
+			if (insExp) {
+				var cancelInsWatcher;
+
+				var watchIns = function() {
+					return scope.$watchCollection(insExp, function(ins, oldIns) {
+						// Get outputs
+						var outs = component.apply(scope, ins);
+						// Push output to scope
+						angular.extend(scope, outs);
+					});
+				}
+
+				var outsNames = [];
+				if (angular.isArray(options.outs) && options.outs.length > 0) {
+					for (var name, i = options.outs.length - 1; i >= 0; i--) {
+						name = options.outs[i];
+						if (angular.isObject(name)) name = name.name;
+						outsNames.push(name);
+					}
+					// Check if to de-inhibit the component
+					scope.$watchCollection('$$watchers', function(watchers) {
+						var shouldInhibit = true;
+						for (var i = watchers.length - 1; i >= 0; i--) {
+							if (angular.isString(watchers[i].exp)
+								&& outsNames.indexOf(watchers[i].exp) >= 0) {
+								shouldInhibit = false;
+								break;
+							}
+						}
+						if (shouldInhibit) {
+							if (angular.isFunction(cancelInsWatcher)) {
+								cancelInsWatcher();
+								cancelInsWatcher = null;
+							}
+						} else if (!cancelInsWatcher) {
+							cancelInsWatcher = watchIns();
+						}
+					});
+				} else {
+					watchIns();
+				}
+			}
+			// Remove componet on scope destroy
+			scope.$component = instance;
+			scope.$on('$destroy', function() {
+				scope.$component = null;
+				// TODO needed?
+			});
+			//
+			return component;
+		}
+
+		// Add metadata to component isntance
+		instance.ins = angular.copy(options.ins);
+		instance.outs = options.outs ? angular.copy(options.outs) : [];
+
+		return instance;
+	}
+
 	var componentProvider = {
 		// componentProvider.register('mycomp', function(inOne, inTWo){}, ['outOne'])
 		// componentProvider.register('mycomp', [{name:'inOne', type:'string'}, inTWo], ['outOne'], function(inOne, inTWo){})
+		// TODO accept a graph input and create a network component
 		register: function(name, ins, outs, transformer) {
 			if (angular.isObject(name)) {
 				angular.extend(components, name)
@@ -38,55 +125,7 @@ flo.provider('$component', ['$injector', function($injector) {
 		},
 
 		$get: function() {
-			return function(name, locals) {
-				var options = components[name];
-				if (!angular.isObject(options)) {
-					throw "$component: No component '" + name + "' found.";
-				}
-
-				// Get ins watcher expression
-				var insExp = buildInsExpression(options.ins);
-
-				// Build instantiable component
-				var transformer = options.transformer;
-				var instance = function(scope, portsAlias) {
-					// TODO use portsAlias to rename ports
-					if (angular.isFunction(options.compile)) {
-						// TODO throw if transformer is set
-						transformer = $injector.invoke(options.compile, options, locals);
-						// TODO throw if transformer is not a function
-					}
-					// Validate transformer outputs
-					function component() {
-						var ins = parseInput(options.ins, arguments);
-						var outs = transformer.apply(scope, ins); // todo should this be the scope? what when it $destroy?
-						return parseOutput(options.outs, outs);
-					};
-					// Apply wathers to scope
-					if (insExp) {
-						scope.$watchCollection(insExp, function(ins, oldIns) {
-							// Get outputs
-							var outs = component.apply(scope, ins);
-							// Push output to scope
-							angular.extend(scope, outs);
-						});
-					}
-					// Remove componet on scope destroy
-					scope.$component = instance;
-					scope.$on('$destroy', function() {
-						scope.$component = null;
-						// TODO needed?
-					});
-					//
-					return component;
-				}
-
-				// Add metadata to component isntance
-				instance.ins = angular.copy(options.ins);
-				instance.outs = options.outs ? angular.copy(options.outs) : [];
-
-				return instance;
-			}
+			return componentFactory;
 		}
 	};
 
@@ -157,19 +196,24 @@ flo.provider('$component', ['$injector', function($injector) {
 
 flo.provider('$network', function() {
 
-	function network($rootScope, $parse, $component, name, graph) {
+	function network($rootScope, $parse, $component, name, graphOrDecl) {
 		this.$scope = $rootScope.$new(true);
 		this.$parse = $parse;
 		this.$component = $component;
 
 		this.$scope.name = name;
-		this.$scope.processes = {};
-		this.$scope.connections = [];
-		this.$scope.graph = graph;
+		this.$scope.$processes = {};
+		this.$scope.$connections = {}; // to -> {from: data:}
+		if (angular.isObject(graphOrDecl)) {
+			this.graph(graphOrDecl);
+		} else if (angular.isString(graphOrDecl)) {
+			// TODO this.decl ...
+		}
 		// TODO watch/parse graph if present
 	}
 
 	network.prototype.process = function(name, component, portsAlias) {
+		var self = this;
 		// Get component
 		if (angular.isString(component)) {
 			component = this.$component(component);
@@ -178,34 +222,97 @@ flo.provider('$network', function() {
 			throw "$network: Invalid component: " + component;
 		}
 		// Destroy previous process if present
-		var oldProcess = this.$scope.processes[name];
+		var oldProcess = this.$scope.$processes[name];
 		if (angular.isDefined(oldProcess)) {
 			oldProcess.$destroy();
 		}
 		// Create new process
 		var processScope = this.$scope.$new(true);
-		this.$scope.processes[name] = processScope;
+		this.$scope.$processes[name] = processScope;
+		processScope.$on('$destroy', function() {
+			delete self.$scope.$processes[name];
+		});
 		// Initalize component
 		component(processScope, portsAlias);
 		return this;
 	};
 
 	network.prototype.connection = function(from, to) {
-		// TODO sanity check of form, to
-		// TODO dont like the 'processes.' + to ...
-		var self = this;
-		var wire = this.$parse('processes.' + to).assign;
-		var endConnection = this.$scope.$watch('processes.' + from, function(value) {
-			// self.$scope.$apply(function() {
-				wire(self.$scope, value);
-			// });
+		var self = this,
+		    target = parseProcessPath(to),
+		    wire = this.$parse(target.port).assign,
+		    processScope = this.$scope.$processes[target.process];
+		var endConnection = this.probe(from, function(value) {
+			wire(processScope, value);
 		});
 		var connection = {
 			from: from,
-			to: to,
-			$destroy: endConnection
+			$destroy: function() {
+				delete self.$scope.$connections[to];
+				endConnection();
+			}
 		};
-		this.$scope.connections.push(connection);
+		this.$scope.$connections[to] = connection;
+		return this;
+	};
+
+	network.prototype.constant = function(data, to) {
+		var self = this,
+		    target = parseProcessPath(to),
+		    wire = this.$parse(target.port).assign;
+		wire(this.$scope.$processes[target.process], data);
+		//
+		var connection = {
+			data: data,
+			$destroy: function() {
+				delete self.$scope.$connections[to];
+			}
+		};
+		this.$scope.$connections[to] = connection;
+		return this;
+	};
+
+	network.prototype.probe = function(path, handler) {
+		path = parseProcessPath(path);
+		var processScope = this.$scope.$processes[path.process];
+		return processScope.$watch(path.port, handler);
+	};
+
+	network.prototype.empty = function() {
+		for (var to in this.$scope.$connections) {
+			this.$scope.$connections[to].$destroy();
+		}
+		for (var name in this.$scope.$processes) {
+			this.$scope.$processes[name].$destroy();
+		}
+	};
+
+	network.prototype.graph = function(graph) {
+		if (arguments.length == 0) {
+			return this.$scope.graph;
+		}
+		if (!angular.isObject(graph)) {
+			throw "$network: Invalid graph: " + graph;
+		}
+		this.empty();
+		if (angular.isObject(graph.processes)) {
+			var process;
+			for (var name in graph.processes) {
+				process = graph.processes[name];
+				this.process(name, process.component, process.portsAlias);
+			}
+		}
+		if (angular.isObject(graph.connections)) {
+			for (var to in graph.connections) {
+				con = graph.connections[to];
+				if (angular.isDefined(con.from)) {
+					this.connection(con.from, to);
+				} else if (angular.isDefined(con.data)) {
+					this.constant(con.data, to);
+				}
+			}
+		}
+		this.$scope.graph = graph;
 		return this;
 	};
 
@@ -218,6 +325,20 @@ flo.provider('$network', function() {
 	}
 
 	return networkProvider;
+
+	function parseProcessPath(path) {
+		var dot;
+		if(!angular.isString(path)
+			|| path.length < 1
+			|| path[0] == '.'
+			|| (dot = path.lastIndexOf('.')) < 1) {
+			throw "$network: Invalid process path: " + path;
+		}
+		return {
+			process: path.substr(0, dot).replace(/^[\s"'\[]+|[\s"'\]]+$/g, ''),
+			port: path.substr(dot + 1)
+		};
+	}
 });
 
 flo.directive('floNetwork', function() {
