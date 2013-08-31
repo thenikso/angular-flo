@@ -96,6 +96,14 @@ describe('$controller', function () {
 				[{name:'testout', type:'string'}, {name:'testout2', type:'all'}]);
 		});
 
+		it('should not register an invalid component', function() {
+			module(function ($componentProvider) {
+				expect($componentProvider.register).toThrow();
+				expect(function() { $componentProvider.register('name') }).toThrow();
+				expect(function() { $componentProvider.register(3, function(){}) }).toThrow();
+			});
+		});
+
 	});
 
 	describe('transformer', function() {
