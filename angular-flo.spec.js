@@ -96,6 +96,17 @@ describe('$controller', function () {
 				[{name:'testout', type:'string'}, {name:'testout2', type:'all'}]);
 		});
 
+		it('should create anonymous components', function() {
+			var c = null;
+			inject(function ($component) {
+				c = $component(function(in1, in2){}, ['out1'])
+			});
+			expect(c).toBeDefined();
+			expect(angular.isFunction(c)).toBeTruthy();
+			expect(c.ins).toEqual([{ name:'in1', type:'all' }, { name:'in2', type:'all' }]);
+			expect(c.outs).toEqual([{ name:'out1', type:'all' }]);
+		});
+
 		it('should not register an invalid component', function() {
 			module(function ($componentProvider) {
 				expect($componentProvider.register).toThrow();

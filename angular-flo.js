@@ -11,7 +11,16 @@ flo.provider('$component', ['$injector', function($injector) {
 	// TODO make an $inhibit property that avoid computation, will be changed by network if there are output $connections?
 	// inhibit and only enable if $$watchers has out ports watchers? not possible...
 	function componentFactory(name, locals) {
-		var settings = components[name];
+		var settings = null;
+
+		if (angular.isString(name)) {
+			settings = components[name];
+		} else if (angular.isFunction(name)) {
+			settings = {};
+			settings.transformer = name;
+			settings.ins = validateComponentPorts($injector.annotate(name));
+			settings.outs = validateComponentPorts(locals);
+		}
 		if (!angular.isObject(settings)) {
 			throw "$component: No component '" + name + "' found.";
 		}
