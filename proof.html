@@ -42,7 +42,7 @@
 			.connection('["nothing"].out', 'upme.in')
 			.process('logthis', 'logger')
 			.connection('upme.out', 'logthis.in')
-			.constant('lol', 'nothing.in');
+			.data('lol', 'nothing.in');
 			// .export($scope, { 'nothing.out':'x' })
 			// .import($scope, { 'nothing.in':'y' })
 	});

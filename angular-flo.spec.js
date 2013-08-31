@@ -326,6 +326,10 @@ describe('$network', function() {
   	expect(net.$scope.$watch).toBeDefined();
   	expect(net.$scope.$processes).toEqual({});
   	expect(net.$scope.$connections).toEqual({});
+  	expect(angular.isFunction(net.probe)).toBeTruthy();
+  	expect(angular.isFunction(net.process)).toBeTruthy();
+  	expect(angular.isFunction(net.connection)).toBeTruthy();
+  	expect(angular.isFunction(net.data)).toBeTruthy();
 	});
 
 	describe('processes', function() {
@@ -381,9 +385,16 @@ describe('$network', function() {
 			expect(probe).toHaveBeenCalledWith('foo');
 		});
 
+		it('should connect constnt data', function() {
+			net.data('foo', 'p1.in1');
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith('foo', undefined);
+		});
+
 		it('should throw if invalid', function() {
 			expect(function() { net.connection('p1.out', 'p2.in2') }).toThrow();
 			expect(function() { net.connection('p1.invalidout', 'p2.in1') }).toThrow();
+			expect(function() { net.data('foo', 'p2.in2') }).toThrow();
 		});
 
 	});

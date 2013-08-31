@@ -331,10 +331,14 @@ flo.provider('$network', function() {
 		return this;
 	};
 
-	network.prototype.constant = function(data, to) {
+	network.prototype.data = function(data, to) {
 		var self = this,
 		    target = parseProcessPath(to),
 		    wire = this.$parse(target.port).assign;
+		to = target.process + '.' + target.port;
+		if (angular.isDefined(this.$scope.$connections[to])) {
+			throw "$network: A connection to `" + to + "` is already present";
+		}
 		wire(this.$scope.$processes[target.process], data);
 		//
 		var connection = {
