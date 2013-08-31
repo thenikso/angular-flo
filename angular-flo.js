@@ -399,4 +399,4 @@ flo.directive('floNetwork', function() {
 
 })(angular, window, document);
 
-angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');
+angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";flo-network,[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');

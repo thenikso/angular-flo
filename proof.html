@@ -7,6 +7,15 @@
 	<input type="text" ng-model="in">
 	<div>{{in}}</div>
 	<div>{{out}}</div>
+	<div>{{otherOut}}</div>
+
+	<flo-network
+		name="myNetwork"
+		import="{ 'something.in':in }"
+		export="{ 'upper.out':otherOut }">
+		something(othercomp) OUT -> IN upper(mycomp) OUT -> IN disp(logger)
+		'done' -> IN disp()
+	</flo-network>
 
 	<script src="bower_components/angular/angular.js"></script>
 	<script src="angular-flo.js"></script>
