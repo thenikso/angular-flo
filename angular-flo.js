@@ -8,115 +8,63 @@ var flo = angular.module('ngFlo', []);
 flo.provider('$component', ['$injector', function($injector) {
 	var components = {};
 
-	function componentFactory(name, locals) {
-		var settings = null;
+	/**
+	 * @ngdoc object
+	 * @name flo.$componentProvider
+	 * @description
+	 * The {@link flo.$component $component service} is used to retrieve registered
+	 * components and create anonymous ones.
+	 *
+	 * This provider allows component registration via the
+	 * {@link flo.$componentProvider#register register} method.
+	 */
+	function $ComponentProvider() {
 
-		if (angular.isString(name)) {
-			settings = components[name];
-		} else if (angular.isFunction(name)) {
-			settings = {};
-			settings.transformer = name;
-			settings.ins = validateComponentPorts($injector.annotate(name));
-			settings.outs = validateComponentPorts(locals);
-			locals = null;
-		}
-		if (!angular.isObject(settings)) {
-			throw "$component: No component '" + name + "' found.";
-		}
-
-		// Get ins watcher expression
-		var insExp = buildInsExpression(settings.ins);
-
-		// Build instantiable component
-		var transformer = settings.transformer;
-		// TODO use options.portsAlias to rename ports
-		if (angular.isFunction(settings.compile)) {
-			// TODO throw if transformer is set
-			transformer = $injector.invoke(settings.compile, settings, locals);
-			// TODO throw if transformer is not a function
-		}
-
-		var instance = function(scope, options) {
-			options = options || {};
-
-			// Validate transformer outputs
-			function component() {
-				var ins = parseInput(settings.ins, arguments);
-				var outs = transformer.apply(scope, ins);
-				return parseOutput(settings.outs, outs);
-			};
-			// Apply wathers to scope
-			if (scope) {
-				if (insExp) {
-					var cancelInsWatcher;
-
-					var watchIns = function() {
-						return scope.$watchCollection(insExp, function(ins, oldIns) {
-							// Get outputs
-							var outs = component.apply(scope, ins);
-							// Push output to scope
-							angular.extend(scope, outs);
-						});
-					}
-
-					if (options.noInhibition !== true
-						&& angular.isArray(settings.outs)
-						&& settings.outs.length > 0) {
-						// Check if to de-inhibit the component
-						scope.$watchCollection('$$watchers', function(watchers) {
-							var shouldInhibit = true;
-							for (var i = watchers.length - 1; i >= 0; i--) {
-								if (angular.isString(watchers[i].exp)
-									&& angular.isDefined(instance.getOutNamed(watchers[i].exp))) {
-									shouldInhibit = false;
-									break;
-								}
-							}
-							if (shouldInhibit) {
-								if (angular.isFunction(cancelInsWatcher)) {
-									cancelInsWatcher();
-									cancelInsWatcher = null;
-								}
-							} else if (!cancelInsWatcher) {
-								cancelInsWatcher = watchIns();
-							}
-						});
-					} else {
-						watchIns();
-					}
-				}
-				// Remove componet on scope destroy
-				(scope.$components = scope.$components || []).push(instance);
-				scope.$on('$destroy', function() {
-					scope.$components.splice(scope.$components.indexOf(instance), 1);
-				});
-			}
-			//
-			return component;
-		}
-
-		// Add metadata to component isntance
-		function getPortNamedFactory(ports) {
-			return function(name) {
-				if (!ports) return;
-				for (var i = ports.length - 1; i >= 0; i--) {
-					if (ports[i].name === name) {
-						return ports[i];
-					}
-				}
-			}
-		}
-		instance.ins = angular.copy(settings.ins);
-		instance.getInNamed = getPortNamedFactory(instance.ins);
-		instance.outs = angular.copy(settings.outs);
-		instance.getOutNamed = getPortNamedFactory(instance.outs);
-
-		return instance;
-	}
-
-	var componentProvider = {
-		// TODO accept a graph input and create a network component
-		register: function(name, ins, outs, transformer) {
+		/**
+		 * @ngdoc function
+		 * @name flo.$componentProvider#register
+		 * @methodOf flo.$componentProvider
+		 * @requires $injector
+		 *
+		 * @param {string|Object} name Component name. If called with an object then
+		 * 		it is copied into the registered components after ports validation.
+		 * 		The object should have this format:
+		 *
+		 * 			* `name`: The name of the component to register. This should be an
+		 * 				object iself with the properties of the component:
+		 * 				* `ins`: see the `ins` parameter;
+		 * 				* `outs`: see the `outs` parameter;
+		 * 				* `transformer`: see the `transformer` parameter;
+		 * 				* `compile`: an injectable function that should return a transformer function.
+		 *
+		 * @param {Array|Function} ins If called with a function, it is considered then
+		 * 		it is considered the transformer function, in which case the input port
+		 * 		names will be derived by the function parameters names using
+		 * 		{@link ng.$injector#annotate $injector.annotate}. Otherwise it is the
+		 * 		array of input ports. The array may contain objects like:
+		 *
+		 * 			* `{ name:<*String*>, validate:<*String|Function*> }`:
+		 * 				* `name`: the name of the port;
+		 * 				* `validate`: If it is a string, the type of the port input will be
+		 * 					checked with `typeof`. The special type `all` can be used to accept
+		 * 					any value. If it is a function, it will be called with the port
+		 * 					value uppon validation and it should return a truthy or falsy value.
+		 *
+		 * 		The port array can contains only port name strings; in which case they
+		 * 		will be validated and transformed to accept any kind of value.
+		 *
+		 * @param {Array=} outs The declaration of output ports. This array should have
+		 * 		the same format as `ins`.
+		 *
+		 * @param {Function} transformer Component transformer function. It can be annotated
+		 * 		with `$ins` and `$outs` which will only be used if the corresponding paramenter
+		 * 		is not specified. The transformer will receive a number of input arguments
+		 * 		equal an in the same order as the `ins` array. It should return an object
+		 * 		with keys equal to the `outs` array port names. If this method returns a
+		 * 		plain value, it will be converted to an object with the first `outs` port
+		 * 		name as key. If no `outs` are specified, the return object key will be "out".
+		 */
+		 this.register = function(name, ins, outs, transformer) {
 			if (angular.isObject(name)) {
 				var options;
 				for (var n in name) {
@@ -125,12 +73,14 @@ flo.provider('$component', ['$injector', function($injector) {
 					options.outs = validateComponentPorts(options.outs, options.ins);
 					components[n] = options;
 				}
-				return componentProvider;
+				return this;
 			}
+
 			if (!angular.isString(name)) {
-				throw "$componentProvider: Component name should be a string, got: " + name;
-				return componentProvider;
+				throw "$componentProvider: Invalid component name: " + name;
+				return this;
 			}
+
 			if (angular.isFunction(ins)) {
 				transformer = ins;
 				ins = undefined;
@@ -138,15 +88,23 @@ flo.provider('$component', ['$injector', function($injector) {
 					transformer.$ins = $injector.annotate(transformer);
 				}
 			}
+
+			if (!angular.isFunction(transformer)) {
+				throw "$componentProvider: Invalid transformer: " + transformer;
+			}
+
 			if (!angular.isDefined(ins)) {
 				ins = transformer.$ins;
 			}
+
 			if (!angular.isDefined(outs)) {
 				outs = transformer.$outs;
 			}
+
 			if (!angular.isDefined(outs)) {
 				outs = [DEFAULT_OUT];
 			}
+
 			ins = validateComponentPorts(ins);
 			outs = validateComponentPorts(outs, ins);
 			components[name] = {
@@ -154,15 +112,163 @@ flo.provider('$component', ['$injector', function($injector) {
 				outs: outs,
 				transformer: transformer
 			};
-			return componentProvider;
-		},
 
-		$get: function() {
-			return componentFactory;
+			return this;
+		};
+
+		this.$get = function() {
+
+			/**
+			 * @ngdoc function
+			 * @name flo.$component
+			 * @requires $injector
+			 *
+			 * @param {string|Function} name If called with a function then it's considered to be the
+			 *    annotated transformer function of an anonymous component.
+			 * 		Otherwise it's considered to be a string which is used to retrieve
+			 * 		the component constructor registered via `$componentProvider`.
+			 *
+			 * @param {Object} locals Injection locals for the `compile` function of
+			 * 		the registered controller. If `name` is a funciton than this object
+			 * 		is instead considered as the `outs` array for the anonymous component.
+			 * @return {Function} A function that can be used to attach the controller
+			 * 		to a scope.
+			 *
+			 * @description
+			 * `$component` service is responsible for retrieving and preparing a component.
+			 *
+			 * The returned functions should be used to attach the component to a scope:
+			 * `$component('MyComponent')($scope, { noInhibition: true })`.
+			 *
+			 * By attaching a component to a scope, the component will not become active
+			 * unless an output port is directly watched in the given scope or the
+			 * `noInhibition` option is set to `true`.
+			 *
+			 * Once active, the component will watch for input port names in the given
+			 * scope and set the scope keys corresponding to output port names with
+			 * the result of the transfomer function.
+			 *
+			 * Options are not required and they can be:
+			 *
+			 * 	* `noInhibition`: a boolean value indicating if the inhibition logic
+			 * 		should be employed;
+			 * 	* `aliasPorts`: an object containig port name as key and a string as value.
+			 * 		This mapping will be used to watch and write different properties of
+			 * 		the scope to avoid conflicts.
+			 *
+			 * The results of applying a component to a scope is another function that
+			 * performs the validated transform function.
+			 */
+			return function(name, locals) {
+				var settings = null;
+
+				if (angular.isString(name)) {
+					settings = components[name];
+				} else if (angular.isFunction(name)) {
+					settings = {};
+					settings.transformer = name;
+					settings.ins = validateComponentPorts($injector.annotate(name));
+					settings.outs = validateComponentPorts(locals);
+					locals = null;
+				}
+
+				if (!angular.isObject(settings)) {
+					throw "$component: No component '" + name + "' found.";
+				}
+
+				var insExp = buildInsExpression(settings.ins);
+
+				var transformer = settings.transformer;
+				// TODO use options.portsAlias to rename ports
+				if (angular.isFunction(settings.compile)) {
+					// TODO throw if transformer is set
+					transformer = $injector.invoke(settings.compile, settings, locals);
+					// TODO throw if transformer is not a function
+				}
+
+				var instance = function(scope, options) {
+					options = options || {};
+
+					// Validate transformer outputs
+					function component() {
+						var ins = parseInput(settings.ins, arguments);
+						var outs = transformer.apply(scope, ins);
+						return parseOutput(settings.outs, outs);
+					};
+					// Apply wathers to scope
+					if (scope) {
+						// Remove componet on scope destroy
+						(scope.$components = scope.$components || []).push(instance);
+						scope.$on('$destroy', function() {
+							scope.$components.splice(scope.$components.indexOf(instance), 1);
+						});
+
+						if (insExp) {
+							var cancelInsWatcher;
+
+							var watchIns = function() {
+								return scope.$watchCollection(insExp, function(ins, oldIns) {
+									// Get outputs
+									var outs = component.apply(scope, ins);
+									// Push output to scope
+									angular.extend(scope, outs);
+								});
+							}
+
+							if (options.noInhibition !== true
+								&& angular.isArray(settings.outs)
+								&& settings.outs.length > 0) {
+								// Check if to de-inhibit the component
+								scope.$watchCollection('$$watchers', function(watchers) {
+									var shouldInhibit = true;
+									for (var i = watchers.length - 1; i >= 0; i--) {
+										if (angular.isString(watchers[i].exp)
+											&& angular.isDefined(instance.getOutNamed(watchers[i].exp))) {
+											shouldInhibit = false;
+											break;
+										}
+									}
+									if (shouldInhibit) {
+										if (angular.isFunction(cancelInsWatcher)) {
+											cancelInsWatcher();
+											cancelInsWatcher = null;
+										}
+									} else if (!cancelInsWatcher) {
+										cancelInsWatcher = watchIns();
+									}
+								});
+							} else {
+								watchIns();
+							}
+						}
+					}
+					//
+					return component;
+				}
+
+				// Add metadata to component isntance
+				function getPortNamedFactory(ports) {
+					return function(name) {
+						if (!ports) return;
+						for (var i = ports.length - 1; i >= 0; i--) {
+							if (ports[i].name === name) {
+								return ports[i];
+							}
+						}
+					}
+				}
+				instance.ins = angular.copy(settings.ins);
+				instance.getInNamed = getPortNamedFactory(instance.ins);
+				instance.outs = angular.copy(settings.outs);
+				instance.getOutNamed = getPortNamedFactory(instance.outs);
+
+				return instance;
+			}
 		}
-	};
 
-	return componentProvider;
+	}
+
+	return new $ComponentProvider;
 
 	function validateComponentPorts(ports, otherValidatedPorts) {
 		if (!ports) return null;
@@ -173,15 +279,20 @@ flo.provider('$component', ['$injector', function($injector) {
 		for (var port, i = ports.length - 1; i >= 0; i--) {
 			port = ports[i];
 			if (angular.isString(port)) {
-				port = { name: port, type: TYPE_ANY };
+				port = { name: port, validate: TYPE_ANY };
 			} else if (!angular.isString(port.name)) {
 				throw "$componentProvider: Invalid port name: " + port.name
-			} else if (!angular.isDefined(port.type)) {
-				port.type = TYPE_ANY
+			} else if (!angular.isDefined(port.validate)) {
+				port.validate = TYPE_ANY
 			}
 			if (port.name.match(/\s+/) != null) {
 				throw "$componentProvider: Port name must not contain spaces; got: " + port.name
 			}
+			angular.forEach(validatedPorts, function(vp) {
+				if (vp.name == port.name) {
+					throw "$componentProvider: Duplicated port name: " + port.name;
+				}
+			});
 			// check for duplicate input/output ports
 			if (angular.isArray(otherValidatedPorts)) {
 				for (var j = otherValidatedPorts.length - 1; j >= 0; j--) {
@@ -252,9 +363,9 @@ flo.provider('$component', ['$injector', function($injector) {
 
 	function checkPortType(port, value) {
 		if (angular.isDefined(value) && (
-			(angular.isFunction(port.type) && !port.type(value))
+			(angular.isFunction(port.validate) && !port.validate(value))
 			||
-			(value && angular.isString(port.type) && port.type != TYPE_ANY && typeof value != port.type)
+			(value && angular.isString(port.validate) && port.validate != TYPE_ANY && typeof value != port.validate)
 		)) {
 			throw "Type error!! TODO make me better: " + port.name;
 		}

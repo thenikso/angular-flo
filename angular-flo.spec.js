@@ -48,16 +48,16 @@ describe('$controller', function () {
 			module(function ($componentProvider) {
 				$componentProvider.register('test', ['testin'], ['testout'], function() {});
 				$componentProvider.register('test2',
-					[{name:'testin', type:'number'}, {name:'testin2', type:'all'}],
-					[{name:'testout', type:'string'}, 'testout2'],
+					[{name:'testin', validate:'number'}, {name:'testin2', validate:'all'}],
+					[{name:'testout', validate:'string'}, 'testout2'],
 					function() {});
 			});
 			expectValidComponent('test',
-				[{name:'testin', type:'all'}],
-				[{name:'testout', type:'all'}]);
+				[{name:'testin', validate:'all'}],
+				[{name:'testout', validate:'all'}]);
 			expectValidComponent('test2',
-				[{name:'testin', type:'number'}, {name:'testin2', type:'all'}],
-				[{name:'testout', type:'string'}, {name:'testout2', type:'all'}]);
+				[{name:'testin', validate:'number'}, {name:'testin2', validate:'all'}],
+				[{name:'testout', validate:'string'}, {name:'testout2', validate:'all'}]);
 		});
 
 		it('should register a component with abreviated notation', function () {
@@ -66,23 +66,23 @@ describe('$controller', function () {
 				$componentProvider.register('test2', function() {});
 			});
 			expectValidComponent('test',
-				[{name:'testin', type:'all'}],
-				[{name:'testout', type:'all'}]);
+				[{name:'testin', validate:'all'}],
+				[{name:'testout', validate:'all'}]);
 			expectValidComponent('test2',
 				[],
-				[{name:'out', type:'all'}]);
+				[{name:'out', validate:'all'}]);
 		});
 
 		it('should register a component with decorated notation', function () {
 			module(function ($componentProvider) {
 				var transformer = function(testin){};
 				transformer.$ins = ['decoratedin'];
-				transformer.$outs = [{ name:'decoratedout', type:'none' }];
+				transformer.$outs = [{ name:'decoratedout', validate:'none' }];
 				$componentProvider.register('test', transformer);
 			});
 			expectValidComponent('test',
-				[{name:'decoratedin', type:'all'}],
-				[{ name:'decoratedout', type:'none' }]);
+				[{name:'decoratedin', validate:'all'}],
+				[{ name:'decoratedout', validate:'none' }]);
 		});
 
 		it('should register a component with object notation', function () {
@@ -94,18 +94,18 @@ describe('$controller', function () {
 						transformer: function() {}
 					},
 					'test2': {
-						ins: [{name:'testin', type:'number'}, {name:'testin2', type:'all'}],
-						outs: [{name:'testout', type:'string'}, 'testout2'],
+						ins: [{name:'testin', validate:'number'}, {name:'testin2', validate:'all'}],
+						outs: [{name:'testout', validate:'string'}, 'testout2'],
 						compile: function() {}
 					}
 				});
 			});
 			expectValidComponent('test',
-				[{name:'testin', type:'all'}],
-				[{name:'testout', type:'all'}]);
+				[{name:'testin', validate:'all'}],
+				[{name:'testout', validate:'all'}]);
 			expectValidComponent('test2',
-				[{name:'testin', type:'number'}, {name:'testin2', type:'all'}],
-				[{name:'testout', type:'string'}, {name:'testout2', type:'all'}]);
+				[{name:'testin', validate:'number'}, {name:'testin2', validate:'all'}],
+				[{name:'testout', validate:'string'}, {name:'testout2', validate:'all'}]);
 		});
 
 		it('should create anonymous components', function() {
@@ -115,8 +115,8 @@ describe('$controller', function () {
 			});
 			expect(c).toBeDefined();
 			expect(angular.isFunction(c)).toBeTruthy();
-			expect(c.ins).toEqual([{ name:'in1', type:'all' }, { name:'in2', type:'all' }]);
-			expect(c.outs).toEqual([{ name:'out1', type:'all' }]);
+			expect(c.ins).toEqual([{ name:'in1', validate:'all' }, { name:'in2', validate:'all' }]);
+			expect(c.outs).toEqual([{ name:'out1', validate:'all' }]);
 		});
 
 		it('should not register an invalid component', function() {
@@ -130,6 +130,8 @@ describe('$controller', function () {
 				expect(function() { componentProvider.register(3, function(){}) }).toThrow();
 				expect(function() { componentProvider.register('name', ['with space'], ['out'], function(){}) }).toThrow();
 				expect(function() { componentProvider.register('name', ['equal'], ['equal'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['equal', 'equal'], ['out'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['in'], ['equal', 'equal'], function(){}) }).toThrow();
 			});
 		});
 
@@ -150,12 +152,12 @@ describe('$controller', function () {
 				test.typeSpy = jasmine.createSpy('typeSpy').andReturn(true);
 				test.comp = getComponent('comp',
 					[
-						{ name:'input', type:'string' },
-						{ name:'other', type:function(){
+						{ name:'input', validate:'string' },
+						{ name:'other', validate:function(){
 							return test.typeSpy.apply(this, arguments);
 						}}
 					],
-					[{ name:'output', type:'string' }],
+					[{ name:'output', validate:'string' }],
 					function() { return test.tran.apply(this, arguments) });
 				test.scope = null;
 				test.inst = test.comp(test.scope);
@@ -395,6 +397,16 @@ describe('$network', function() {
 			expect(function() { net.connection('p1.out', 'p2.in2') }).toThrow();
 			expect(function() { net.connection('p1.invalidout', 'p2.in1') }).toThrow();
 			expect(function() { net.data('foo', 'p2.in2') }).toThrow();
+		});
+
+	});
+
+	describe('import/export', function() {
+
+		var scope;
+
+		beforeEach(function() {
+			scope = getNewScope();
 		});
 
 	});
