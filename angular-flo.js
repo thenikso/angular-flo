@@ -1,6 +1,7 @@
 (function(angular, window, document, undefined) {'use strict';
 
-var TYPE_ANY = 'all';
+var TYPE_ANY = 'all',
+    DEFAULT_OUT = 'out';
 
 var flo = angular.module('ngFlo', []);
 
@@ -10,92 +11,97 @@ flo.provider('$component', ['$injector', function($injector) {
 	// TODO make an $inhibit property that avoid computation, will be changed by network if there are output $connections?
 	// inhibit and only enable if $$watchers has out ports watchers? not possible...
 	function componentFactory(name, locals) {
-		var options = components[name];
-		if (!angular.isObject(options)) {
+		var settings = components[name];
+		if (!angular.isObject(settings)) {
 			throw "$component: No component '" + name + "' found.";
 		}
 
 		// Get ins watcher expression
-		var insExp = buildInsExpression(options.ins);
+		var insExp = buildInsExpression(settings.ins);
 
 		// Build instantiable component
-		var transformer = options.transformer;
-		var instance = function(scope, portsAlias) {
-			// TODO use portsAlias to rename ports
-			if (angular.isFunction(options.compile)) {
-				// TODO throw if transformer is set
-				transformer = $injector.invoke(options.compile, options, locals);
-				// TODO throw if transformer is not a function
-			}
+		var transformer = settings.transformer;
+		// TODO use options.portsAlias to rename ports
+		if (angular.isFunction(settings.compile)) {
+			// TODO throw if transformer is set
+			transformer = $injector.invoke(settings.compile, settings, locals);
+			// TODO throw if transformer is not a function
+		}
+
+		var instance = function(scope, options) {
+			options = options || {};
+
 			// Validate transformer outputs
 			function component() {
-				var ins = parseInput(options.ins, arguments);
+				var ins = parseInput(settings.ins, arguments);
 				var outs = transformer.apply(scope, ins); // todo should this be the scope? what when it $destroy?
-				return parseOutput(options.outs, outs);
+				return parseOutput(settings.outs, outs);
 			};
 			// Apply wathers to scope
-			if (insExp) {
-				var cancelInsWatcher;
+			if (scope) {
+				if (insExp) {
+					var cancelInsWatcher;
 
-				var watchIns = function() {
-					return scope.$watchCollection(insExp, function(ins, oldIns) {
-						// Get outputs
-						var outs = component.apply(scope, ins);
-						// Push output to scope
-						angular.extend(scope, outs);
-					});
-				}
-
-				var outsNames = [];
-				if (angular.isArray(options.outs) && options.outs.length > 0) {
-					for (var name, i = options.outs.length - 1; i >= 0; i--) {
-						name = options.outs[i];
-						if (angular.isObject(name)) name = name.name;
-						outsNames.push(name);
+					var watchIns = function() {
+						return scope.$watchCollection(insExp, function(ins, oldIns) {
+							// Get outputs
+							var outs = component.apply(scope, ins);
+							// Push output to scope
+							angular.extend(scope, outs);
+						});
 					}
-					// Check if to de-inhibit the component
-					scope.$watchCollection('$$watchers', function(watchers) {
-						var shouldInhibit = true;
-						for (var i = watchers.length - 1; i >= 0; i--) {
-							if (angular.isString(watchers[i].exp)
-								&& outsNames.indexOf(watchers[i].exp) >= 0) {
-								shouldInhibit = false;
-								break;
-							}
+
+					var outsNames = [];
+					if (options.noInhibition !== true
+						&& angular.isArray(settings.outs)
+						&& settings.outs.length > 0) {
+						for (var name, i = settings.outs.length - 1; i >= 0; i--) {
+							name = settings.outs[i];
+							if (angular.isObject(name)) name = name.name;
+							outsNames.unshift(name);
 						}
-						if (shouldInhibit) {
-							if (angular.isFunction(cancelInsWatcher)) {
-								cancelInsWatcher();
-								cancelInsWatcher = null;
+						// Check if to de-inhibit the component
+						scope.$watchCollection('$$watchers', function(watchers) {
+							var shouldInhibit = true;
+							for (var i = watchers.length - 1; i >= 0; i--) {
+								if (angular.isString(watchers[i].exp)
+									&& outsNames.indexOf(watchers[i].exp) >= 0) {
+									shouldInhibit = false;
+									break;
+								}
 							}
-						} else if (!cancelInsWatcher) {
-							cancelInsWatcher = watchIns();
-						}
-					});
-				} else {
-					watchIns();
+							if (shouldInhibit) {
+								if (angular.isFunction(cancelInsWatcher)) {
+									cancelInsWatcher();
+									cancelInsWatcher = null;
+								}
+							} else if (!cancelInsWatcher) {
+								cancelInsWatcher = watchIns();
+							}
+						});
+					} else {
+						watchIns();
+					}
 				}
+				// Remove componet on scope destroy
+				scope.$component = instance;
+				scope.$on('$destroy', function() {
+					scope.$component = null;
+					// TODO needed?
+				});
 			}
-			// Remove componet on scope destroy
-			scope.$component = instance;
-			scope.$on('$destroy', function() {
-				scope.$component = null;
-				// TODO needed?
-			});
 			//
 			return component;
 		}
 
 		// Add metadata to component isntance
-		instance.ins = angular.copy(options.ins);
-		instance.outs = angular.copy(options.outs);
+		instance.ins = angular.copy(settings.ins);
+		instance.outs = angular.copy(settings.outs);
 
 		return instance;
 	}
 
 	var componentProvider = {
-		// componentProvider.register('mycomp', function(inOne, inTWo){}, ['outOne'])
-		// componentProvider.register('mycomp', [{name:'inOne', type:'string'}, inTWo], ['outOne'], function(inOne, inTWo){})
 		// TODO accept a graph input and create a network component
 		register: function(name, ins, outs, transformer) {
 			if (angular.isObject(name)) {
@@ -186,38 +192,37 @@ flo.provider('$component', ['$injector', function($injector) {
 		var validated = [];
 		for (var port, i = ins.length - 1; i >= 0; i--) {
 			port = ins[i];
-			if (angular.isObject(port)) {
-				checkPortType(port, values[i]);
-			}
-			validated.push(values[i]);
+			checkPortType(port, values[i]);
+			validated.unshift(values[i]);
 		}
 		return validated;
 	}
 
 	function parseOutput(outs, value) {
 		if (!angular.isObject(value)) {
-			value = {
-				out: value
-			};
+			var outputName = DEFAULT_OUT,
+			    output = {};
+			if (angular.isArray(outs) && outs.length > 0) {
+				outputName = outs[0].name;
+			}
+			output[outputName] = value;
+			value = output;
 		}
 		if (!angular.isArray(outs)) {
 			return value;
 		}
 		var validated = {};
-		for (var port, name, i = outs.length - 1; i >= 0; i--) {
-			port = name = outs[i];
-			if (angular.isObject(port)) {
-				name = port.name; // TODO check for presence
-				checkPortType(port, value[name]);
-			}
-			validated[name] = value[name];
+		for (var port, i = outs.length - 1; i >= 0; i--) {
+			port = outs[i];
+			checkPortType(port, value[port.name]);
+			validated[port.name] = value[port.name];
 		}
 		return validated;
 	}
 
 	function checkPortType(port, value) {
 		if(angular.isString(port.type) && port.type != TYPE_ANY
-		&& angular.isDefined(value) && typeof value != port.type) {
+		&& angular.isDefined(value) && value && typeof value != port.type) {
 			throw "Type error!! TODO make me better: " + port.name;
 		}
 	}

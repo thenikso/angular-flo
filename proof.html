@@ -23,7 +23,7 @@
 	})
 
 	.controller('Ctrl', function($scope, $component, $network) {
-		$component('mycomp')($scope);
+		$component('mycomp')($scope, { noInhibition:true });
 		// var c = $component('mycomp')($scope);
 		// console.log(c('asdf'));
 		$network('nope')
