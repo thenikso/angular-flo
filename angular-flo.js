@@ -8,8 +8,6 @@ var flo = angular.module('ngFlo', []);
 flo.provider('$component', ['$injector', function($injector) {
 	var components = {};
 
-	// TODO make an $inhibit property that avoid computation, will be changed by network if there are output $connections?
-	// inhibit and only enable if $$watchers has out ports watchers? not possible...
 	function componentFactory(name, locals) {
 		var settings = null;
 
@@ -390,11 +388,11 @@ flo.provider('$network', function() {
 		}
 		if (angular.isObject(graph.connections)) {
 			for (var to in graph.connections) {
-				con = graph.connections[to];
+				var con = graph.connections[to];
 				if (angular.isDefined(con.from)) {
 					this.connection(con.from, to);
 				} else if (angular.isDefined(con.data)) {
-					this.constant(con.data, to);
+					this.data(con.data, to);
 				}
 			}
 		}

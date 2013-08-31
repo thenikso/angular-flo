@@ -322,14 +322,14 @@ describe('$network', function() {
 	});
 
 	it('should be created valid and empty', function() {
-  	expect(net).toBeDefined();
-  	expect(net.$scope.$watch).toBeDefined();
-  	expect(net.$scope.$processes).toEqual({});
-  	expect(net.$scope.$connections).toEqual({});
-  	expect(angular.isFunction(net.probe)).toBeTruthy();
-  	expect(angular.isFunction(net.process)).toBeTruthy();
-  	expect(angular.isFunction(net.connection)).toBeTruthy();
-  	expect(angular.isFunction(net.data)).toBeTruthy();
+		expect(net).toBeDefined();
+		expect(net.$scope.$watch).toBeDefined();
+		expect(net.$scope.$processes).toEqual({});
+		expect(net.$scope.$connections).toEqual({});
+		expect(angular.isFunction(net.probe)).toBeTruthy();
+		expect(angular.isFunction(net.process)).toBeTruthy();
+		expect(angular.isFunction(net.connection)).toBeTruthy();
+		expect(angular.isFunction(net.data)).toBeTruthy();
 	});
 
 	describe('processes', function() {
@@ -364,13 +364,13 @@ describe('$network', function() {
 		var probe;
 
 		beforeEach(function() {
-		  probe = jasmine.createSpy('probe');
-		  net.process('p1', 'one');
-		  net.process('p2', 'two');
-		  net.connection('p1.out', 'p2.in2');
-		  net.probe('p2.out', function (val) {
-		  	probe(val);
-		  });
+			probe = jasmine.createSpy('probe');
+			net.process('p1', 'one');
+			net.process('p2', 'two');
+			net.connection('p1.out', 'p2.in2');
+			net.probe('p2.out', function (val) {
+				probe(val);
+			});
 		});
 
 		it('should connect processes', function() {
@@ -395,6 +395,40 @@ describe('$network', function() {
 			expect(function() { net.connection('p1.out', 'p2.in2') }).toThrow();
 			expect(function() { net.connection('p1.invalidout', 'p2.in1') }).toThrow();
 			expect(function() { net.data('foo', 'p2.in2') }).toThrow();
+		});
+
+	});
+
+	describe('graph', function() {
+
+		it('should be emptied', function() {
+			net.process('p1', 'one');
+			net.process('p2', 'two');
+			net.connection('p1.out', 'p2.in2');
+			expect(net.$scope.$processes.p1).toBeDefined();
+			expect(net.$scope.$processes.p2).toBeDefined();
+			expect(net.$scope.$connections['p2.in2']).toBeDefined();
+			net.empty();
+			expect(net.$scope.$processes.p1).not.toBeDefined();
+			expect(net.$scope.$processes.p1).not.toBeDefined();
+			expect(net.$scope.$connections['p2.in2']).not.toBeDefined();
+		});
+
+		it('should define a network from an object', function() {
+			net.graph({
+				processes: {
+					'p1': { component: 'one' },
+					'p2': { component: 'two' }
+				},
+				connections: {
+					'p2.in2': { from: 'p1.out' },
+					'p1.in1': { data: 'foo' }
+				}
+			});
+			expect(net.$scope.$processes.p1).toBeDefined();
+			expect(net.$scope.$processes.p2).toBeDefined();
+			expect(net.$scope.$connections['p1.in1']).toBeDefined();
+			expect(net.$scope.$connections['p2.in2']).toBeDefined();
 		});
 
 	});
