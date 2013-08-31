@@ -118,9 +118,15 @@ describe('$controller', function () {
 					if (other) return other;
 					if (input) return input.toUpperCase();
 				};
+				test.typeSpy = jasmine.createSpy('typeSpy').andReturn(true);
 				test.comp = getComponent('comp',
-					[{ name: 'input', type:'string' }, 'other'],
-					[{ name: 'output', type:'string' }],
+					[
+						{ name:'input', type:'string' },
+						{ name:'other', type:function(){
+							return test.typeSpy.apply(this, arguments);
+						}}
+					],
+					[{ name:'output', type:'string' }],
 					function() { return test.tran.apply(this, arguments) });
 				test.scope = null;
 				test.inst = test.comp(test.scope);
@@ -136,9 +142,11 @@ describe('$controller', function () {
 				test.inst('test');
 				expect(test.inst).toHaveBeenCalledWith('test');
 				expect(test.tran).toHaveBeenCalledWith('test', undefined);
+				expect(test.typeSpy).not.toHaveBeenCalled();
 				test.inst('test', null);
 				expect(test.inst).toHaveBeenCalledWith('test', null);
 				expect(test.tran).toHaveBeenCalledWith('test', null);
+				expect(test.typeSpy).toHaveBeenCalledWith(null);
 				test.inst(null);
 				expect(test.inst).toHaveBeenCalledWith(null);
 				expect(test.tran).toHaveBeenCalledWith(null, undefined);

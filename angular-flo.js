@@ -220,8 +220,11 @@ flo.provider('$component', ['$injector', function($injector) {
 	}
 
 	function checkPortType(port, value) {
-		if(angular.isString(port.type) && port.type != TYPE_ANY
-		&& angular.isDefined(value) && value && typeof value != port.type) {
+		if (angular.isDefined(value) && (
+			(angular.isFunction(port.type) && !port.type(value))
+			||
+			(value && angular.isString(port.type) && port.type != TYPE_ANY && typeof value != port.type)
+		)) {
 			throw "Type error!! TODO make me better: " + port.name;
 		}
 	}
