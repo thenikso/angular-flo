@@ -14,7 +14,8 @@
 		import="{ 'something.in':in }"
 		export="{ 'upper.out':otherOut }">
 		something(othercomp) OUT -> IN upper(mycomp) OUT -> IN disp(logger)
-		'done' -> IN disp()
+		'done' -> IN disp2(logger)
+		something() OUT -> IN disp3(logger)
 	</flo-network>
 
 	<script src="bower_components/angular/angular.js"></script>
@@ -42,6 +43,8 @@
 			.process('logthis', 'logger')
 			.connection('upme.out', 'logthis.in')
 			.constant('lol', 'nothing.in');
+			// .export($scope, { 'nothing.out':'x' })
+			// .import($scope, { 'nothing.in':'y' })
 	});
 
 	angular.module('moar', ['ngFlo']).config(function($componentProvider) {

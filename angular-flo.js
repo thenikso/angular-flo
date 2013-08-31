@@ -20,6 +20,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			settings.transformer = name;
 			settings.ins = validateComponentPorts($injector.annotate(name));
 			settings.outs = validateComponentPorts(locals);
+			locals = null;
 		}
 		if (!angular.isObject(settings)) {
 			throw "$component: No component '" + name + "' found.";
@@ -43,7 +44,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			// Validate transformer outputs
 			function component() {
 				var ins = parseInput(settings.ins, arguments);
-				var outs = transformer.apply(scope, ins); // todo should this be the scope? what when it $destroy?
+				var outs = transformer.apply(scope, ins);
 				return parseOutput(settings.outs, outs);
 			};
 			// Apply wathers to scope
@@ -60,21 +61,15 @@ flo.provider('$component', ['$injector', function($injector) {
 						});
 					}
 
-					var outsNames = [];
 					if (options.noInhibition !== true
 						&& angular.isArray(settings.outs)
 						&& settings.outs.length > 0) {
-						for (var name, i = settings.outs.length - 1; i >= 0; i--) {
-							name = settings.outs[i];
-							if (angular.isObject(name)) name = name.name;
-							outsNames.unshift(name);
-						}
 						// Check if to de-inhibit the component
 						scope.$watchCollection('$$watchers', function(watchers) {
 							var shouldInhibit = true;
 							for (var i = watchers.length - 1; i >= 0; i--) {
 								if (angular.isString(watchers[i].exp)
-									&& outsNames.indexOf(watchers[i].exp) >= 0) {
+									&& angular.isDefined(instance.getOutNamed(watchers[i].exp))) {
 									shouldInhibit = false;
 									break;
 								}
@@ -93,9 +88,9 @@ flo.provider('$component', ['$injector', function($injector) {
 					}
 				}
 				// Remove componet on scope destroy
-				scope.$component = instance;
+				(scope.$components = scope.$components || []).push(instance);
 				scope.$on('$destroy', function() {
-					delete scope.$component;
+					scope.$components.splice(scope.$components.indexOf(instance), 1);
 				});
 			}
 			//
@@ -103,8 +98,20 @@ flo.provider('$component', ['$injector', function($injector) {
 		}
 
 		// Add metadata to component isntance
+		function getPortNamedFactory(ports) {
+			return function(name) {
+				if (!ports) return;
+				for (var i = ports.length - 1; i >= 0; i--) {
+					if (ports[i].name === name) {
+						return ports[i];
+					}
+				}
+			}
+		}
 		instance.ins = angular.copy(settings.ins);
+		instance.getInNamed = getPortNamedFactory(instance.ins);
 		instance.outs = angular.copy(settings.outs);
+		instance.getOutNamed = getPortNamedFactory(instance.outs);
 
 		return instance;
 	}
@@ -117,7 +124,7 @@ flo.provider('$component', ['$injector', function($injector) {
 				for (var n in name) {
 					options = angular.copy(name[n]);
 					options.ins = validateComponentPorts(options.ins);
-					options.outs = validateComponentPorts(options.outs);
+					options.outs = validateComponentPorts(options.outs, options.ins);
 					components[n] = options;
 				}
 				return componentProvider;
@@ -139,9 +146,14 @@ flo.provider('$component', ['$injector', function($injector) {
 			if (!angular.isDefined(outs)) {
 				outs = transformer.$outs;
 			}
+			if (!angular.isDefined(outs)) {
+				outs = [DEFAULT_OUT];
+			}
+			ins = validateComponentPorts(ins);
+			outs = validateComponentPorts(outs, ins);
 			components[name] = {
-				ins: validateComponentPorts(ins),
-				outs: validateComponentPorts(outs),
+				ins: ins,
+				outs: outs,
 				transformer: transformer
 			};
 			return componentProvider;
@@ -154,7 +166,7 @@ flo.provider('$component', ['$injector', function($injector) {
 
 	return componentProvider;
 
-	function validateComponentPorts(ports) {
+	function validateComponentPorts(ports, otherValidatedPorts) {
 		if (!ports) return null;
 		if (!angular.isArray(ports)) {
 			throw "$componentProvider: Invalid ports: " + ports
@@ -164,12 +176,23 @@ flo.provider('$component', ['$injector', function($injector) {
 			port = ports[i];
 			if (angular.isString(port)) {
 				port = { name: port, type: TYPE_ANY };
+			} else if (!angular.isString(port.name)) {
+				throw "$componentProvider: Invalid port name: " + port.name
 			} else if (!angular.isDefined(port.type)) {
 				port.type = TYPE_ANY
 			}
-			if (!angular.isString(port.name) || port.name.match(/\s+/) != null) {
-				throw "$componentProvider: Invalid port name: " + port.name
+			if (port.name.match(/\s+/) != null) {
+				throw "$componentProvider: Port name must not contain spaces; got: " + port.name
 			}
+			// check for duplicate input/output ports
+			if (angular.isArray(otherValidatedPorts)) {
+				for (var j = otherValidatedPorts.length - 1; j >= 0; j--) {
+					if (otherValidatedPorts[j].name == port.name) {
+						throw "$componentProvider: Duplicated port name: " + port.name;
+					}
+				}
+			}
+			// Add to validation
 			validatedPorts.unshift(port);
 		}
 		return validatedPorts;
@@ -247,7 +270,9 @@ flo.provider('$network', function() {
 		this.$parse = $parse;
 		this.$component = $component;
 
-		this.$scope.name = name;
+		if (angular.isDefined(name)) {
+			this.$scope.$network = name;
+		}
 		this.$scope.$processes = {};
 		this.$scope.$connections = {}; // to -> {from: data:}
 		if (angular.isObject(graphOrDecl)) {
@@ -258,10 +283,10 @@ flo.provider('$network', function() {
 		// TODO watch/parse graph if present
 	}
 
-	network.prototype.process = function(name, component, portsAlias) {
+	network.prototype.process = function(name, component, options) {
 		var self = this;
 		// Get component
-		if (angular.isString(component)) {
+		if (angular.isString(component) || angular.isFunction(component)) {
 			component = this.$component(component);
 		}
 		if (!angular.isFunction(component)) {
@@ -279,7 +304,7 @@ flo.provider('$network', function() {
 			delete self.$scope.$processes[name];
 		});
 		// Initalize component
-		component(processScope, portsAlias);
+		component(processScope, options);
 		return this;
 	};
 
@@ -288,6 +313,10 @@ flo.provider('$network', function() {
 		    target = parseProcessPath(to),
 		    wire = this.$parse(target.port).assign,
 		    processScope = this.$scope.$processes[target.process];
+		to = target.process + '.' + target.port;
+		if (angular.isDefined(this.$scope.$connections[to])) {
+			throw "$network: A connection to `" + to + "` is already present";
+		}
 		var endConnection = this.probe(from, function(value) {
 			wire(processScope, value);
 		});
@@ -321,6 +350,13 @@ flo.provider('$network', function() {
 	network.prototype.probe = function(path, handler) {
 		path = parseProcessPath(path);
 		var processScope = this.$scope.$processes[path.process];
+		if (!angular.isDefined(processScope)) {
+			throw "$network: Invalid process to probe: " + path.process;
+		}
+		if (!angular.isDefined(processScope.$components[0].getInNamed(path.port))
+		&& !angular.isDefined(processScope.$components[0].getOutNamed(path.port))) {
+			throw "$network: Invalid port to probe `" + path.port + "` for process `" + path.process + "`";
+		}
 		return processScope.$watch(path.port, handler);
 	};
 

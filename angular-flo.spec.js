@@ -11,6 +11,14 @@ describe('$controller', function () {
 			expect(angular.isFunction(c)).toBeTruthy();
 			expect(c.ins).toEqual(ins);
 			expect(c.outs).toEqual(outs);
+			expect(angular.isFunction(c.getInNamed)).toBeTruthy();
+			for (var i = ins.length - 1; i >= 0; i--) {
+				expect(c.getInNamed(ins[i].name)).toEqual(ins[i]);
+			}
+			expect(angular.isFunction(c.getOutNamed)).toBeTruthy();
+			for (var i = outs.length - 1; i >= 0; i--) {
+				expect(c.getOutNamed(outs[i].name)).toEqual(outs[i]);
+			}
 		});
 	}
 
@@ -55,10 +63,14 @@ describe('$controller', function () {
 		it('should register a component with abreviated notation', function () {
 			module(function ($componentProvider) {
 				$componentProvider.register('test', function(testin) {}, ['testout']);
+				$componentProvider.register('test2', function() {});
 			});
 			expectValidComponent('test',
 				[{name:'testin', type:'all'}],
 				[{name:'testout', type:'all'}]);
+			expectValidComponent('test2',
+				[],
+				[{name:'out', type:'all'}]);
 		});
 
 		it('should register a component with decorated notation', function () {
@@ -117,6 +129,7 @@ describe('$controller', function () {
 				expect(function() { componentProvider.register('name') }).toThrow();
 				expect(function() { componentProvider.register(3, function(){}) }).toThrow();
 				expect(function() { componentProvider.register('name', ['with space'], ['out'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['equal'], ['equal'], function(){}) }).toThrow();
 			});
 		});
 
@@ -219,9 +232,9 @@ describe('$controller', function () {
 
 			it('should insert and remove iself from the scope', function() {
 				test.inst = test.comp(test.scope);
-				expect(test.scope.$component).toEqual(test.comp);
+				expect(test.scope.$components).toContain(test.comp);
 				test.scope.$destroy();
-				expect(test.scope.$component).not.toBeDefined();
+				expect(test.scope.$components).not.toContain(test.comp);
 			});
 
 			it('should watch the scope for inputs with option noInhibition', function() {
@@ -276,6 +289,101 @@ describe('$controller', function () {
 				expect(test.outputWatcher.calls.length).toEqual(1);
 			});
 
+		});
+
+	});
+
+});
+
+describe('$network', function() {
+
+	beforeEach(module('ngFlo'));
+
+	var comp = null;
+	var net = null;
+
+	beforeEach(function() {
+		comp = {};
+		comp.one = jasmine.createSpy('compOne');
+		comp.two = jasmine.createSpy('compTwo');
+		module(function ($componentProvider) {
+			$componentProvider.register('one', function(in1, in2) {
+				comp.one(in1, in2);
+				return in1;
+			});
+			$componentProvider.register('two', function(in1, in2) {
+				comp.two(in1, in2);
+				return in2;
+			});
+		});
+		inject(function($network) {
+			net = $network('test');
+		});
+	});
+
+	it('should be created valid and empty', function() {
+  	expect(net).toBeDefined();
+  	expect(net.$scope.$watch).toBeDefined();
+  	expect(net.$scope.$processes).toEqual({});
+  	expect(net.$scope.$connections).toEqual({});
+	});
+
+	describe('processes', function() {
+
+		it('should be added when valid', function() {
+			net.process('p1', 'one');
+			expect(net.$scope.$processes.p1).toBeDefined();
+			expect(comp.one).not.toHaveBeenCalled();
+			expect(function() { net.process() }).toThrow();
+			expect(function() { net.process('p1', 'notacomp') }).toThrow();
+		});
+
+		it('should be successfully probed', function() {
+			var probe = jasmine.createSpy('probe');
+			net.process('p1', 'one');
+			net.probe('p1.out', function (val) {
+				probe(val);
+			});
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith(undefined, undefined);
+			expect(probe).toHaveBeenCalledWith(undefined);
+			net.$scope.$processes.p1.in1 = 'foo';
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith('foo', undefined);
+			expect(probe).toHaveBeenCalledWith('foo');
+		});
+
+	});
+
+	describe('connections', function() {
+
+		var probe;
+
+		beforeEach(function() {
+		  probe = jasmine.createSpy('probe');
+		  net.process('p1', 'one');
+		  net.process('p2', 'two');
+		  net.connection('p1.out', 'p2.in2');
+		  net.probe('p2.out', function (val) {
+		  	probe(val);
+		  });
+		});
+
+		it('should connect processes', function() {
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith(undefined, undefined);
+			expect(comp.two).toHaveBeenCalledWith(undefined, undefined);
+			expect(probe).toHaveBeenCalledWith(undefined);
+			net.$scope.$processes.p1.in1 = 'foo';
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith('foo', undefined);
+			expect(comp.two).toHaveBeenCalledWith(undefined, 'foo');
+			expect(probe).toHaveBeenCalledWith('foo');
+		});
+
+		it('should throw if invalid', function() {
+			expect(function() { net.connection('p1.out', 'p2.in2') }).toThrow();
+			expect(function() { net.connection('p1.invalidout', 'p2.in1') }).toThrow();
 		});
 
 	});
