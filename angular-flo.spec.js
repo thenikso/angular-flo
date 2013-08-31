@@ -108,10 +108,15 @@ describe('$controller', function () {
 		});
 
 		it('should not register an invalid component', function() {
+			var componentProvider;
 			module(function ($componentProvider) {
-				expect($componentProvider.register).toThrow();
-				expect(function() { $componentProvider.register('name') }).toThrow();
-				expect(function() { $componentProvider.register(3, function(){}) }).toThrow();
+				componentProvider = $componentProvider;
+			});
+			inject(function() {
+				expect(componentProvider.register).toThrow();
+				expect(function() { componentProvider.register('name') }).toThrow();
+				expect(function() { componentProvider.register(3, function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['with space'], ['out'], function(){}) }).toThrow();
 			});
 		});
 

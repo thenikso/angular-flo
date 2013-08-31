@@ -164,10 +164,11 @@ flo.provider('$component', ['$injector', function($injector) {
 			port = ports[i];
 			if (angular.isString(port)) {
 				port = { name: port, type: TYPE_ANY };
-			} else if (!angular.isString(port.name)) {
-				throw "$componentProvider: Invalid port name: " + port.name
 			} else if (!angular.isDefined(port.type)) {
 				port.type = TYPE_ANY
+			}
+			if (!angular.isString(port.name) || port.name.match(/\s+/) != null) {
+				throw "$componentProvider: Invalid port name: " + port.name
 			}
 			validatedPorts.unshift(port);
 		}
