@@ -88,7 +88,7 @@ flo.provider('$component', ['$injector', function($injector) {
 
 		// Add metadata to component isntance
 		instance.ins = angular.copy(options.ins);
-		instance.outs = options.outs ? angular.copy(options.outs) : [];
+		instance.outs = angular.copy(options.outs);
 
 		return instance;
 	}
@@ -99,26 +99,35 @@ flo.provider('$component', ['$injector', function($injector) {
 		// TODO accept a graph input and create a network component
 		register: function(name, ins, outs, transformer) {
 			if (angular.isObject(name)) {
-				angular.extend(components, name)
+				var options;
+				for (var n in name) {
+					options = angular.copy(name[n]);
+					options.ins = validateComponentPorts(options.ins);
+					options.outs = validateComponentPorts(options.outs);
+					components[n] = options;
+				}
 				return componentProvider;
 			}
 			if (!angular.isString(name)) {
-				throw "componentProvider: name should be a string";
+				throw "$componentProvider: Component name should be a string, got: " + name;
 				return componentProvider;
 			}
 			if (angular.isFunction(ins)) {
-				transformer = decorateComponentTransformer(ins)
-				ins = undefined
+				transformer = ins;
+				ins = undefined;
+				if (!angular.isDefined(transformer.$ins)) {
+					transformer.$ins = $injector.annotate(transformer);
+				}
 			}
-			if (!angular.isObject(ins)) {
+			if (!angular.isDefined(ins)) {
 				ins = transformer.$ins;
 			}
-			if (!angular.isObject(outs)) {
+			if (!angular.isDefined(outs)) {
 				outs = transformer.$outs;
 			}
 			components[name] = {
-				ins: ins,
-				outs: outs,
+				ins: validateComponentPorts(ins),
+				outs: validateComponentPorts(outs),
 				transformer: transformer
 			};
 			return componentProvider;
@@ -130,6 +139,26 @@ flo.provider('$component', ['$injector', function($injector) {
 	};
 
 	return componentProvider;
+
+	function validateComponentPorts(ports) {
+		if (!ports) return null;
+		if (!angular.isArray(ports)) {
+			throw "$componentProvider: Invalid ports: " + ports
+		}
+		var validatedPorts = [];
+		for (var port, i = ports.length - 1; i >= 0; i--) {
+			port = ports[i];
+			if (angular.isString(port)) {
+				port = { name: port, type: TYPE_ANY };
+			} else if (!angular.isString(port.name)) {
+				throw "$componentProvider: Invalid port name: " + port.name
+			} else if (!angular.isDefined(port.type)) {
+				port.type = TYPE_ANY
+			}
+			validatedPorts.unshift(port);
+		}
+		return validatedPorts;
+	}
 
 	function buildInsExpression(ins) {
 		var insExp = null;
