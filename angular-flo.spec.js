@@ -164,6 +164,88 @@ describe('$controller', function () {
 
 		});
 
+		describe('attached to a scope', function() {
+
+			beforeEach(function() {
+				test = {};
+				test.trans = function(input, other) {
+					if (other) return other;
+					if (input) return input.toUpperCase();
+				};
+				test.comp = getComponent('comp', function(input, other) {
+						return test.trans(input, other);
+					}, ['output']);
+				test.scope = getNewScope();
+				test.outputWatcher = jasmine.createSpy('outputWatcher');
+				spyOn(test, 'trans').andCallThrough();
+			});
+
+			afterEach(function() {
+			  test.scope.$destroy();
+			  test = null;
+			});
+
+			it('should insert and remove iself from the scope', function() {
+			  test.inst = test.comp(test.scope);
+			  expect(test.scope.$component).toEqual(test.comp);
+			  test.scope.$destroy();
+			  expect(test.scope.$component).not.toBeDefined();
+			});
+
+			it('should watch the scope for inputs with option noInhibition', function() {
+				expect(test.scope.$$watchers).toBe(null);
+			  test.inst = test.comp(test.scope, { noInhibition:true });
+			  expect(test.trans).not.toHaveBeenCalled();
+			  expect(test.scope.$$watchers.length).toEqual(1);
+			  test.scope.$digest();
+			  expect(test.trans).toHaveBeenCalledWith(undefined, undefined);
+			});
+
+			it('should not execute if no output is beein directly watched', function() {
+			  test.inst = test.comp(test.scope);
+			  expect(test.trans).not.toHaveBeenCalled();
+			  test.scope.$digest();
+			  expect(test.trans).not.toHaveBeenCalled();
+			});
+
+			it('should execute on watched input changes', function() {
+			  test.inst = test.comp(test.scope);
+			  test.scope.$watch('output', function(val, oldVal) {
+			  	test.outputWatcher(val, oldVal);
+			  });
+			  test.scope.$digest();
+			  expect(test.trans).toHaveBeenCalledWith(undefined, undefined);
+			  expect(test.outputWatcher).toHaveBeenCalledWith(undefined, undefined);
+			  test.scope.input = 'test';
+			  test.scope.$digest();
+			  expect(test.trans).toHaveBeenCalledWith('test', undefined);
+			  expect(test.outputWatcher).toHaveBeenCalledWith('TEST', undefined);
+			  test.scope.$digest();
+			  expect(test.trans.calls.length).toEqual(2);
+			  expect(test.outputWatcher.calls.length).toEqual(2);
+			  test.scope.input = 'test2';
+			  test.scope.$digest();
+			  expect(test.trans).toHaveBeenCalledWith('test2', undefined);
+			  expect(test.outputWatcher).toHaveBeenCalledWith('TEST2', 'TEST');
+			});
+
+			it('should inhibit when all output watchers are removed', function() {
+			  test.inst = test.comp(test.scope);
+			  var endwather = test.scope.$watch('output', function(val, oldVal) {
+			  	test.outputWatcher(val, oldVal);
+			  });
+			  test.scope.$digest();
+			  expect(test.trans).toHaveBeenCalled();
+			  expect(test.outputWatcher).toHaveBeenCalled();
+			  endwather();
+			  test.scope.input = 'test';
+			  test.scope.$digest();
+			  expect(test.trans.calls.length).toEqual(1);
+			  expect(test.outputWatcher.calls.length).toEqual(1);
+			});
+
+		});
+
 	});
 
 });

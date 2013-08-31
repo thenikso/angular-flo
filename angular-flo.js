@@ -86,8 +86,7 @@ flo.provider('$component', ['$injector', function($injector) {
 				// Remove componet on scope destroy
 				scope.$component = instance;
 				scope.$on('$destroy', function() {
-					scope.$component = null;
-					// TODO needed?
+					delete scope.$component;
 				});
 			}
 			//
@@ -169,15 +168,15 @@ flo.provider('$component', ['$injector', function($injector) {
 	function buildInsExpression(ins) {
 		var insExp = null;
 		if (angular.isArray(ins)) {
-			insExp = '[';
+			insExp = ']';
 			for (var name, i = ins.length - 1; i >= 0; i--) {
 				name = ins[i];
 				if (angular.isObject(name)) name = name.name;
-				insExp += name + ',';
+				insExp = ',' + name + insExp;
 			}
 			if (insExp.length > 1) {
-				insExp = insExp.substr(0, insExp.length - 1);
-				insExp += ']';
+				insExp = insExp.substr(1);
+				insExp = '[' + insExp;
 			} else {
 				insExp = null;
 			}
