@@ -540,11 +540,11 @@ flo.provider('$network', function() {
 		var self = this;
 		var cancelWatcher = scope.$watchCollection(importMap, function(map) {
 			if (!angular.isObject(map)) return cancelWatcher();
-			angular.forEach(map, function(val, path) {
+			angular.forEach(map, function(scopeVar, path) {
 				path = parseProcessPath(path);
 				var processScope = self.$scope.$processes[path.process];
 				if (processScope) {
-					processScope[path.port] = val;
+					processScope[path.port] = scopeVar;
 				}
 			});
 		});
@@ -553,7 +553,22 @@ flo.provider('$network', function() {
 	};
 
 	network.prototype.export = function(scope, exportMap) {
-		// body...
+		if (!exportMap || angular.equals({}, exportMap)) return this;
+
+		if (!angular.isObject(exportMap)) {
+			exportMap = scope.$eval(exportMap);
+		}
+
+		var self = this;
+		angular.forEach(exportMap, function(path, scopeVar) {
+			path = parseProcessPath(path);
+			var processScope = self.$scope.$processes[path.process];
+			if (processScope && processScope.$components[0].getOutNamed(path.port)) {
+				processScope.$watch(path.port, function(val) {
+					scope[scopeVar] = val;
+				});
+			}
+		});
 	};
 
 	network.prototype.empty = function() {

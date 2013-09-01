@@ -472,13 +472,14 @@ describe('$network', function() {
 			expect(comp.one).toHaveBeenCalledWith('1', '2');
 		});
 
-		// it('should export data to a scope', function() {
-		// 	net.data('foo', 'p1.in1');
-		// 	// net.export(scope, { 'p1.out': 'localOut' });
-		// 	net.export(scope, "{ 'p2.out': localOut2 }");
-		// 	net.$scope.$digest();
-		// 	expect(scope.localOut2).toEqual('foo');
-		// });
+		it('should export data to a scope', function() {
+			net.data('foo', 'p1.in1');
+			net.export(scope, { 'localOut':'p1.out' });
+			net.export(scope, "{ 'localOut2':'p2.out' }");
+			net.$scope.$digest();
+			expect(scope.localOut).toEqual('foo');
+			expect(scope.localOut2).toEqual('foo');
+		});
 
 	});
 

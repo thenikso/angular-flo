@@ -12,7 +12,7 @@
 	<flo-network
 		name="myNetwork"
 		import="{ 'something.in':in }"
-		export="{ 'upper.out':otherOut }">
+		export="{ 'otherOut':'upper.out' }">
 		something(othercomp) OUT -> IN upper(mycomp) OUT -> IN disp(logger)
 		'done' -> IN disp2(logger)
 		something() OUT -> IN disp3(logger)
@@ -43,7 +43,7 @@
 			.process('logthis', 'logger')
 			.connection('upme.out', 'logthis.in')
 			.data('lol', 'nothing.in');
-			// .export($scope, { 'nothing.out':'x' })
+			// .export($scope, { 'x':'nothing.out' })
 			// .import($scope, { 'nothing.in':'y' })
 	});
 
