@@ -75,7 +75,7 @@ line
 
 
 LineTerminator
-  = _ ","? comment? [\n\r\u2028\u2029]?
+  = _ ","? comment? [\n\r\u2028\u2029]? _
 
 comment
   = _ "#" (anychar)*
@@ -86,9 +86,9 @@ connection
 
 bridge
   = x:port _ proc:node _ y:port     { return [proc+'.'+x,{"from":proc+'.'+y}]; }
-  / iip
   / rightlet
   / leftlet
+  / iip
 
 leftlet
   = proc:node _ port:port  { return {"from":proc+'.'+port} }
@@ -115,7 +115,7 @@ port
 anychar
   = [a-zA-Z0-9 .,#:{}@+?!^=()_\-$*/\\\[\]{}\"&`%\|]
 _
-  = (" "*)?
+  = ([" "\t]*)?
 
 __
-  = " "+
+  = [" "\t]+

@@ -849,15 +849,31 @@ flo.provider('$network', function() {
 	}
 });
 
-flo.directive('floNetwork', function() {
+flo.directive('floNetwork', ['$network', function($network) {
 	return {
-		restrict: 'EAC',
-		compile: function(scope, element, transclude) {
-			return function(scope, element, args) {
+		restrict: 'EA',
+		compile: function(element, attr, transclusion) {
+			var name = attr.floNetwork || attr.name || '',
+			    imports = attr['import'],
+			    exports = attr['export'],
+			    fbp = attr.src || element.text();
+			element.replaceWith(angular.element("<!-- flo-network: \n" + fbp + "\n -->"));
 
+			return function(scope, element, args) {
+				var net = $network(name).fbp(fbp);
+				if (imports) {
+					net.import(scope, imports);
+				}
+				if (exports) {
+					net.export(scope, exports);
+				}
+				if (!scope.floNetworks || angular.isArray(scope.floNetworks)) {
+					scope.floNetworks = scope.floNetworks || [];
+					scope.floNetworks.push(net);
+				}
 			}
 		}
 	};
-});
+}]);
 
 angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";flo-network,[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');
