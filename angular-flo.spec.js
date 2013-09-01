@@ -234,12 +234,12 @@ describe('$controller', function () {
 
 			it('should insert and remove iself from the scope', function() {
 				test.inst = test.comp(test.scope);
-				expect(test.scope.$components).toContain(test.comp);
+				expect(test.scope.$components).toContain(test.inst);
 				test.scope.$destroy();
-				expect(test.scope.$components).not.toContain(test.comp);
+				expect(test.scope.$components).not.toContain(test.inst);
 			});
 
-			it('should watch the scope for inputs with option noInhibition', function() {
+			it('should watch the scope immediatly with `noInhibition` option', function() {
 				expect(test.scope.$$watchers).toBe(null);
 				test.inst = test.comp(test.scope, { noInhibition:true });
 				expect(test.trans).not.toHaveBeenCalled();
@@ -291,6 +291,25 @@ describe('$controller', function () {
 				expect(test.outputWatcher.calls.length).toEqual(1);
 			});
 
+			it('should map port names with `portsAlias` options', function() {
+				test.inst = test.comp(test.scope, {
+					portsAlias: {
+						"input": "in1",
+						"other": "in2",
+						output: "out"
+					}
+				});
+				test.scope.in1 = "foo";
+				test.scope.in2 = "bar";
+				test.scope.$watch('out', function(val, oldVal) {
+					test.outputWatcher(val, oldVal);
+				});
+				test.scope.$digest();
+				expect(test.scope.output).not.toBeDefined();
+				expect(test.trans).toHaveBeenCalledWith("foo", "bar");
+				expect(test.outputWatcher).toHaveBeenCalledWith("bar", "bar");
+			});
+
 		});
 
 	});
@@ -332,6 +351,8 @@ describe('$network', function() {
 		expect(angular.isFunction(net.process)).toBeTruthy();
 		expect(angular.isFunction(net.connection)).toBeTruthy();
 		expect(angular.isFunction(net.data)).toBeTruthy();
+		expect(angular.isFunction(net.empty)).toBeTruthy();
+		expect(angular.isFunction(net.graph)).toBeTruthy();
 	});
 
 	describe('processes', function() {

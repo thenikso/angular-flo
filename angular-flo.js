@@ -152,7 +152,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			 *
 			 * 	* `noInhibition`: a boolean value indicating if the inhibition logic
 			 * 		should be employed;
-			 * 	* `aliasPorts`: an object containig port name as key and a string as value.
+			 * 	* `portsAlias`: an object containig port name as key and a string as value.
 			 * 		This mapping will be used to watch and write different properties of
 			 * 		the scope to avoid conflicts.
 			 *
@@ -160,47 +160,55 @@ flo.provider('$component', ['$injector', function($injector) {
 			 * performs the validated transform function.
 			 */
 			return function(name, locals) {
-				var settings = null;
+				var componentSettings = null;
 
 				if (angular.isString(name)) {
-					settings = components[name];
+					componentSettings = components[name];
 				} else if (angular.isFunction(name)) {
-					settings = {};
-					settings.transformer = name;
-					settings.ins = validateComponentPorts($injector.annotate(name));
-					settings.outs = validateComponentPorts(locals);
+					componentSettings = {};
+					componentSettings.transformer = name;
+					componentSettings.ins = validateComponentPorts($injector.annotate(name));
+					componentSettings.outs = validateComponentPorts(locals);
 					locals = null;
 				}
 
-				if (!angular.isObject(settings)) {
+				if (!angular.isObject(componentSettings)) {
 					throw "$component: No component '" + name + "' found.";
 				}
 
-				var insExp = buildInsExpression(settings.ins);
-
-				var transformer = settings.transformer;
-				// TODO use options.portsAlias to rename ports
-				if (angular.isFunction(settings.compile)) {
-					// TODO throw if transformer is set
-					transformer = $injector.invoke(settings.compile, settings, locals);
+				var transformer = componentSettings.transformer;
+				if (angular.isFunction(componentSettings.compile)) {
+					transformer = $injector.invoke(componentSettings.compile, componentSettings, locals);
 					// TODO throw if transformer is not a function
 				}
 
-				var instance = function(scope, options) {
-					options = options || {};
+				var component = function(scope, options) {
+					options = options ? angular.copy(options) : {};
+
+					// Prepare input and output port maps
+					var instanceIns = aliasPorts(angular.copy(component.ins), options.portsAlias),
+					    instanceOuts = aliasPorts(angular.copy(component.outs), options.portsAlias),
+					    insExp = buildInsExpression(instanceIns);
 
 					// Validate transformer outputs
-					function component() {
-						var ins = parseInput(settings.ins, arguments);
-						var outs = transformer.apply(scope, ins);
-						return parseOutput(settings.outs, outs);
+					function componentInstance() {
+						var ins = parseInput(instanceIns, arguments);
+						var outs = transformer.apply(componentInstance, ins);
+						return parseOutput(component.outs, outs, options.portsAlias);
 					};
+
+					componentInstance.component = component;
+					componentInstance.ins = instanceIns;
+					componentInstance.outs = instanceOuts;
+					componentInstance.getInNamed = getPortNamedFactory(instanceIns);
+					componentInstance.getOutNamed = getPortNamedFactory(instanceOuts);
+
 					// Apply wathers to scope
 					if (scope) {
 						// Remove componet on scope destroy
-						(scope.$components = scope.$components || []).push(instance);
+						(scope.$components = scope.$components || []).push(componentInstance);
 						scope.$on('$destroy', function() {
-							scope.$components.splice(scope.$components.indexOf(instance), 1);
+							scope.$components.splice(scope.$components.indexOf(componentInstance), 1);
 						});
 
 						if (insExp) {
@@ -209,21 +217,19 @@ flo.provider('$component', ['$injector', function($injector) {
 							var watchIns = function() {
 								return scope.$watchCollection(insExp, function(ins, oldIns) {
 									// Get outputs
-									var outs = component.apply(scope, ins);
+									var outs = componentInstance.apply(scope, ins);
 									// Push output to scope
 									angular.extend(scope, outs);
 								});
 							}
 
-							if (options.noInhibition !== true
-								&& angular.isArray(settings.outs)
-								&& settings.outs.length > 0) {
+							if (options.noInhibition !== true && instanceOuts.length > 0) {
 								// Check if to de-inhibit the component
 								scope.$watchCollection('$$watchers', function(watchers) {
 									var shouldInhibit = true;
 									for (var i = watchers.length - 1; i >= 0; i--) {
 										if (angular.isString(watchers[i].exp)
-											&& angular.isDefined(instance.getOutNamed(watchers[i].exp))) {
+											&& componentInstance.getOutNamed(watchers[i].exp)) {
 											shouldInhibit = false;
 											break;
 										}
@@ -243,7 +249,7 @@ flo.provider('$component', ['$injector', function($injector) {
 						}
 					}
 					//
-					return component;
+					return componentInstance;
 				}
 
 				// Add metadata to component isntance
@@ -257,12 +263,12 @@ flo.provider('$component', ['$injector', function($injector) {
 						}
 					}
 				}
-				instance.ins = angular.copy(settings.ins);
-				instance.getInNamed = getPortNamedFactory(instance.ins);
-				instance.outs = angular.copy(settings.outs);
-				instance.getOutNamed = getPortNamedFactory(instance.outs);
+				component.ins = angular.copy(componentSettings.ins);
+				component.getInNamed = getPortNamedFactory(component.ins);
+				component.outs = angular.copy(componentSettings.outs);
+				component.getOutNamed = getPortNamedFactory(component.outs);
 
-				return instance;
+				return component;
 			}
 		}
 
@@ -326,6 +332,18 @@ flo.provider('$component', ['$injector', function($injector) {
 		return insExp
 	}
 
+	function aliasPorts(ports, aliases) {
+		if (!aliases) return ports;
+		var alias;
+		angular.forEach(ports, function(port) {
+			alias = aliases[port.name];
+			if (alias) {
+				port.name = alias;
+			}
+		});
+		return ports;
+	}
+
 	function parseInput(ins, values) {
 		if (!angular.isArray(ins)) {
 			return values;
@@ -339,7 +357,7 @@ flo.provider('$component', ['$injector', function($injector) {
 		return validated;
 	}
 
-	function parseOutput(outs, value) {
+	function parseOutput(outs, value, aliases) {
 		if (!angular.isObject(value)) {
 			var outputName = DEFAULT_OUT,
 			    output = {};
@@ -349,14 +367,27 @@ flo.provider('$component', ['$injector', function($injector) {
 			output[outputName] = value;
 			value = output;
 		}
-		if (!angular.isArray(outs)) {
-			return value;
-		}
 		var validated = {};
-		for (var port, i = outs.length - 1; i >= 0; i--) {
-			port = outs[i];
-			checkPortType(port, value[port.name]);
-			validated[port.name] = value[port.name];
+		if (angular.isArray(outs)) {
+			for (var port, i = outs.length - 1; i >= 0; i--) {
+				port = outs[i];
+				checkPortType(port, value[port.name]);
+				validated[port.name] = value[port.name];
+			}
+		} else {
+			validated = value; // TODO angular.copy(value)?
+		}
+		if (aliases) {
+			var aliased = {}, alias;
+			angular.forEach(validated, function(val, key) {
+				alias = aliases[key];
+				if (alias) {
+					aliased[alias] = val;
+				} else {
+					aliased[key] = val;
+				}
+			});
+			validated = aliased;
 		}
 		return validated;
 	}
