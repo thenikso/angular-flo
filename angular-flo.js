@@ -527,6 +527,33 @@ flo.provider('$network', function() {
 		return processScope.$watch(path.port, handler);
 	};
 
+	network.prototype.import = function(scope, importMap) {
+		if (!importMap || angular.equals({}, importMap)) return this;
+
+		if (!angular.isString(importMap)) {
+			var importMapString = '{';
+			angular.forEach(importMap, function(scopeVar, path) {
+				importMapString += "'" + path + "':" + scopeVar + ",";
+			});
+			if (importMapString.length == 1) return this;
+			importMap = importMapString.substr(0, importMapString.length - 1) + '}';
+		}
+
+		var self = this;
+		var cancelWatcher = scope.$watchCollection(importMap, function(map) {
+			if (!angular.isObject(map)) return cancelWatcher();
+			angular.forEach(map, function(val, path) {
+				path = parseProcessPath(path);
+				var processScope = self.$scope.$processes[path.process];
+				if (processScope) {
+					processScope[path.port] = val;
+				}
+			});
+		});
+
+		return this;
+	};
+
 	network.prototype.empty = function() {
 		for (var to in this.$scope.$connections) {
 			this.$scope.$connections[to].$destroy();

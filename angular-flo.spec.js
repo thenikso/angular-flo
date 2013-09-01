@@ -1,5 +1,13 @@
 'use strict';
 
+function getNewScope() {
+	var scope = null;
+	inject(function($rootScope) {
+		scope = $rootScope.$new(true);
+	});
+	return scope;
+}
+
 describe('$controller', function () {
 
 	beforeEach(module('ngFlo'));
@@ -32,14 +40,6 @@ describe('$controller', function () {
 			c = $component(name);
 		});
 		return c;
-	}
-
-	function getNewScope() {
-		var scope = null;
-		inject(function($rootScope) {
-			scope = $rootScope.$new(true);
-		});
-		return scope;
 	}
 
 	describe('registration', function () {
@@ -313,24 +313,24 @@ describe('$controller', function () {
 			});
 
 			it('should throw if port aliases are invalid port names', function() {
-			  expect(function() {
-			  	test.comp(test.scope, {
-			  		portsAlias: {
-			  			"input": "in.1",
-			  			"other": "in 2",
-			  			output: "out"
-			  		}
-			  	});
-			  }).toThrow();
-			  expect(function() {
-			  	test.comp(test.scope, {
-			  		portsAlias: {
-			  			"input": "in1",
-			  			"other": "in2",
-			  			output: "in1"
-			  		}
-			  	});
-			  }).toThrow();
+				expect(function() {
+					test.comp(test.scope, {
+						portsAlias: {
+							"input": "in.1",
+							"other": "in 2",
+							output: "out"
+						}
+					});
+				}).toThrow();
+				expect(function() {
+					test.comp(test.scope, {
+						portsAlias: {
+							"input": "in1",
+							"other": "in2",
+							output: "in1"
+						}
+					});
+				}).toThrow();
 			});
 
 		});
@@ -374,6 +374,7 @@ describe('$network', function() {
 		expect(angular.isFunction(net.process)).toBeTruthy();
 		expect(angular.isFunction(net.connection)).toBeTruthy();
 		expect(angular.isFunction(net.data)).toBeTruthy();
+		expect(angular.isFunction(net.import)).toBeTruthy();
 		expect(angular.isFunction(net.empty)).toBeTruthy();
 		expect(angular.isFunction(net.graph)).toBeTruthy();
 	});
@@ -447,10 +448,27 @@ describe('$network', function() {
 
 	describe('import/export', function() {
 
-		var scope;
+		var scope, probe;
 
 		beforeEach(function() {
 			scope = getNewScope();
+			probe = jasmine.createSpy('probe');
+			net.process('p1', 'one');
+			net.process('p2', 'two');
+			net.connection('p1.out', 'p2.in2');
+			net.probe('p2.out', function (val) {
+				probe(val);
+			});
+		});
+
+		it('should import data from a scope', function() {
+			net.import(scope, { 'p1.in1': 'localIn' });
+			net.import(scope, "{ 'p1.in2': localIn2 }");
+			scope.localIn = '1';
+			scope.localIn2 = '2';
+			scope.$digest();
+			net.$scope.$digest();
+			expect(comp.one).toHaveBeenCalledWith('1', '2');
 		});
 
 	});
