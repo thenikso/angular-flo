@@ -3,10 +3,17 @@ module.exports = function (grunt) {
   require('matchdep').filterDev('grunt-*').forEach(grunt.loadNpmTasks);
 
   grunt.initConfig({
-    karma: {
-      unit: {
-        configFile: 'karma.conf.js',
-        singleRun: true
+    watch: {
+      pegs: {
+        files: ['src/*.peg'],
+        tasks: ['peg'],
+      }
+    },
+    peg: {
+      fbp: {
+        src: 'src/fbp.peg',
+        dest: '.tmp/fbpParser.js',
+        options: { exportVar: "fbpParser" }
       }
     },
     concat: {
@@ -16,7 +23,7 @@ module.exports = function (grunt) {
         footer: '})(angular, window, document);'
       },
       dist: {
-        src: ['src/angular-flo.js'],
+        src: ['src/angular-flo.js', '.tmp/fbpParser.js'],
         dest: 'angular-flo.js',
       },
     },
@@ -40,11 +47,13 @@ module.exports = function (grunt) {
     }
   });
 
-  grunt.registerTask('test', [
-    'karma'
+  grunt.registerTask('develop', [
+    'peg',
+    'watch'
   ]);
 
   grunt.registerTask('build', [
+    'peg',
     'concat',
     'ngmin',
     'uglify'

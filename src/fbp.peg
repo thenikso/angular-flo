@@ -1,0 +1,121 @@
+{
+  var parser, edges, nodes;
+
+  parser = this;
+
+  edges = parser.edges = [];
+
+  nodes = {};
+
+  parser.addNode = function (nodeName, comp) {
+    if (!nodes[nodeName]) {
+      nodes[nodeName] = {}
+    }
+    if (!!comp.comp) {
+      nodes[nodeName].component = comp.comp;
+    }
+    if (!!comp.meta) {
+      nodes[nodeName].metadata={routes:comp.meta};
+    }
+
+  }
+
+  parser.getResult = function () {
+    return {processes:nodes, connections:parser.processEdges()};
+  }
+
+  var flatten = function (array, isShallow) {
+    var index = -1,
+      length = array ? array.length : 0,
+      result = [];
+
+    while (++index < length) {
+      var value = array[index];
+
+      if (value instanceof Array) {
+        Array.prototype.push.apply(result, isShallow ? value : flatten(value));
+      }
+      else {
+        result.push(value);
+      }
+    }
+    return result;
+  }
+
+  parser.registerEdges = function (edges) {
+
+    edges.forEach(function (o, i) {
+      parser.edges.push(o);
+    });
+  }
+
+  parser.processEdges = function () {
+    var flats, grouped;
+    flats = flatten(parser.edges);
+    grouped = {};
+    var last;
+    flats.forEach(function (o, i) {
+      if (i % 2 !== 0) {
+        grouped[o] = last;
+        return;
+      }
+      last = o;
+    });
+    return grouped;
+  }
+}
+
+start
+  = (line)*  { return parser.getResult();  }
+
+line
+  = comment [\n\r\u2028\u2029]?
+  / _ [\n\r\u2028\u2029]
+  / _ edges:connection _ LineTerminator? {return parser.registerEdges(edges);}
+
+
+LineTerminator
+  = _ ","? comment? [\n\r\u2028\u2029]?
+
+comment
+  = _ "#" (anychar)*
+
+connection
+  = x:bridge _ "->" _ y:connection { return [x,y]; }
+  / bridge
+
+bridge
+  = x:port _ proc:node _ y:port     { return [proc+'.'+x,{"from":proc+'.'+y}]; }
+  / iip
+  / rightlet
+  / leftlet
+
+leftlet
+  = proc:node _ port:port  { return {"from":proc+'.'+port} }
+
+iip
+  = "'" iip:(anychar)* "'"        { return {"data":iip.join("")} }
+
+rightlet
+  = port:port _ proc:node  { return proc+'.'+port }
+
+node
+  = node:[a-zA-Z]+ comp:component? { if(comp){parser.addNode(node.join(""),comp);}; return node.join("")}
+
+component
+  = "(" comp:([a-zA-Z/\-]+)? meta:compMeta? ")" { var o = {}; comp ? o.comp = comp.join("") : o.comp = ''; meta ? o.meta = meta.join("").split(',') : null; return o; }
+
+compMeta
+  = ":" meta:[a-zA-Z/]+  {return meta}
+
+
+port
+  = portname:[A-Z.0-9]+ __ {return portname.join("").toLowerCase()}
+
+anychar
+  = [a-zA-Z0-9 .,#:{}@+?!^=()_\-$*/\\\[\]{}\"&`%\|]
+_
+  = (" "*)?
+
+__
+  = " "+
