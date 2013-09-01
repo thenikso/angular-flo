@@ -8,20 +8,20 @@ flo.provider('$component', ['$injector', function($injector) {
 
 	/**
 	 * @ngdoc object
-	 * @name flo.$componentProvider
+	 * @name ngFlo.$componentProvider
 	 * @description
-	 * The {@link flo.$component $component service} is used to retrieve registered
+	 * The {@link ngFlo.$component $component service} is used to retrieve registered
 	 * components and create anonymous ones.
 	 *
 	 * This provider allows component registration via the
-	 * {@link flo.$componentProvider#register register} method.
+	 * {@link ngFlo.$componentProvider#register register} method.
 	 */
 	function $ComponentProvider() {
 
 		/**
 		 * @ngdoc function
-		 * @name flo.$componentProvider#register
-		 * @methodOf flo.$componentProvider
+		 * @name ngFlo.$componentProvider#register
+		 * @methodOf ngFlo.$componentProvider
 		 * @requires $injector
 		 *
 		 * @param {string|Object} name Component name. If called with an object then
@@ -118,7 +118,7 @@ flo.provider('$component', ['$injector', function($injector) {
 
 			/**
 			 * @ngdoc function
-			 * @name flo.$component
+			 * @name ngFlo.$component
 			 * @requires $injector
 			 *
 			 * @param {string|Function} name If called with a function then it's considered to be the
@@ -158,7 +158,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			 * performs the validated transform function.
 			 *
 			 * Components are designed mainly to be used in conjunction with
-			 * {@link flo.$network $network} but they can also be used independently
+			 * {@link ngFlo.$network $network} but they can also be used independently
 			 * on regular scopes:
 			 *
 			 * @example
@@ -446,14 +446,14 @@ flo.provider('$network', function() {
 
 	/**
 	 * @ngdoc object
-	 * @name flo.$network
+	 * @name ngFlo.$network
 	 * @requires $rootScope, $component
 	 *
 	 * @param {string=} name The name of the network.
 	 *
 	 * @param {Object=|stirng=} graphOrFbp If an object, it will be passed to the
-	 * 		{@link flo.$network#graph graph} method. If a string it will be passed to
-	 * 		{@link flo.$network#fbp fbp}.
+	 * 		{@link ngFlo.$network#graph graph} method. If a string it will be passed to
+	 * 		{@link ngFlo.$network#fbp fbp}.
 	 *
 	 * @description
 	 * `$network` service is responsible for declaring component processes and connect
@@ -496,7 +496,7 @@ flo.provider('$network', function() {
 	 * @methodOf AUTO.$network
 	 *
 	 * @description
-	 * Creates a process out of a {@link flo.$component component} in the network.
+	 * Creates a process out of a {@link ngFlo.$component component} in the network.
 	 * The process has its own isolated scope.
 	 *
 	 * @param {!string} name The name to identify the process. This name will be
@@ -539,7 +539,7 @@ flo.provider('$network', function() {
 	 * @methodOf AUTO.$network
 	 *
 	 * @description
-	 * Creates a connection between two {@link flo.$network processes} ports.
+	 * Creates a connection between two {@link ngFlo.$network processes} ports.
 	 * The process in the `from` argument will forward the output of the specified
 	 * port to the specified input port of the process in the `to` argument.
 	 *
@@ -849,31 +849,70 @@ flo.provider('$network', function() {
 	}
 });
 
-flo.directive('floNetwork', ['$network', function($network) {
+/**
+ * @ngdoc directive
+ * @name ngFlo.directive:floNetwork
+ *
+ * @description
+ * The `floNetwork` directive allaws the declaration of {@link ngFlo.$network networks}
+ * using the {@link ngFlo.$network#fbp FBP} domain-specific language in the DOM.
+ *
+ * With the use of
+ * {@link ngFlo.$network#import import} and {@link ngFlo.$network#export export}
+ * attributes, the network can be attached to the current scope.
+ *
+ * The FBP network itself can be specified as the element content text.
+ * If an `src` attribute is specified, the network will be loaded from the specified url.
+ *
+ * @element ANY
+ * @param {expression=} import {@link guide/expression Expression} to use as network
+ * 		{@link ngFlo.$network#import import}.
+ * @param {expression=} export {@link guide/expression Expression} to use as network
+ * 		{@link ngFlo.$network#export export}.
+ * @param {string=} src Url from which to load the network FBP source.
+ * @param {string=} <text> The text inside the element will be interpreted as FBP.
+ */
+flo.directive('floNetwork', ['$network', '$http', '$sce', function($network, $http, $sce) {
 	return {
 		restrict: 'EA',
 		compile: function(element, attr, transclusion) {
 			var name = attr.floNetwork || attr.name || '',
 			    imports = attr['import'],
 			    exports = attr['export'],
-			    fbp = attr.src || element.text();
+			    fbp = element.text();
 			element.replaceWith(angular.element("<!-- flo-network: \n" + fbp + "\n -->"));
 
-			return function(scope, element, args) {
-				var net = $network(name).fbp(fbp);
-				if (imports) {
-					net.import(scope, imports);
-				}
-				if (exports) {
-					net.export(scope, exports);
-				}
-				if (!scope.floNetworks || angular.isArray(scope.floNetworks)) {
-					scope.floNetworks = scope.floNetworks || [];
-					scope.floNetworks.push(net);
+			var net;
+			return function(scope, element, attrs) {
+				if (attrs.src) {
+					scope.$watch($sce.parseAsResourceUrl(attrs.src), function(src) {
+						$http.get(src).success(function(response) {
+							if (!net) {
+								net = $network(name);
+							}
+							populateNetwork(scope, net, response, imports, exports);
+						});
+						scope.$emit('$floNetworkRequested');
+					});
+				} else if (fbp) {
+					net = $network(name);
+					populateNetwork(scope, net, fbp, imports, exports);
 				}
 			}
 		}
 	};
+
+	function populateNetwork(scope, net, fbp, imports, exports) {
+		net.fbp(fbp);
+		if (imports) {
+			net.import(scope, imports);
+		}
+		if (exports) {
+			net.export(scope, exports);
+		}
+		scope.$emit('$floNetworkLoaded');
+		return net;
+	}
 }]);
 
 angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";flo-network,[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');
