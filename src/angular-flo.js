@@ -426,9 +426,8 @@ flo.provider('$component', ['$injector', function($injector) {
 
 flo.provider('$network', function() {
 
-	function network($rootScope, $parse, $component, name, graphOrDecl) {
+	function network($rootScope, $component, name, graphOrDecl) {
 		this.$scope = $rootScope.$new(true);
-		this.$parse = $parse;
 		this.$component = $component;
 
 		if (angular.isDefined(name)) {
@@ -472,14 +471,13 @@ flo.provider('$network', function() {
 	network.prototype.connection = function(from, to) {
 		var self = this,
 		    target = parseProcessPath(to),
-		    wire = this.$parse(target.port).assign,
 		    processScope = this.$scope.$processes[target.process];
 		to = target.process + '.' + target.port;
 		if (angular.isDefined(this.$scope.$connections[to])) {
 			throw "$network: A connection to `" + to + "` is already present";
 		}
 		var endConnection = this.probe(from, function(value) {
-			wire(processScope, value);
+			processScope[target.port] = value;
 		});
 		var connection = {
 			from: from,
@@ -494,13 +492,12 @@ flo.provider('$network', function() {
 
 	network.prototype.data = function(data, to) {
 		var self = this,
-		    target = parseProcessPath(to),
-		    wire = this.$parse(target.port).assign;
+		    target = parseProcessPath(to);
 		to = target.process + '.' + target.port;
 		if (angular.isDefined(this.$scope.$connections[to])) {
 			throw "$network: A connection to `" + to + "` is already present";
 		}
-		wire(this.$scope.$processes[target.process], data);
+		this.$scope.$processes[target.process][target.port] = data;
 		//
 		var connection = {
 			data: data,
@@ -610,9 +607,9 @@ flo.provider('$network', function() {
 	};
 
 	var networkProvider = {
-		$get: ['$rootScope', '$parse', '$component', function($rootScope, $parse, $component) {
+		$get: ['$rootScope', '$component', function($rootScope, $component) {
 			return function(name, graph) {
-				return new network($rootScope, $parse, $component, name, graph);
+				return new network($rootScope, $component, name, graph);
 			};
 		}]
 	}
