@@ -185,16 +185,17 @@ flo.provider('$component', ['$injector', function($injector) {
 				var component = function(scope, options) {
 					options = options ? angular.copy(options) : {};
 
-					// Prepare input and output port maps
+					// Prepare instance ports by aliasing them
 					var instanceIns = aliasPorts(angular.copy(component.ins), options.portsAlias),
-					    instanceOuts = aliasPorts(angular.copy(component.outs), options.portsAlias),
-					    insExp = buildInsExpression(instanceIns);
+					    instanceOuts = aliasPorts(angular.copy(component.outs), options.portsAlias, instanceIns);
 
-					// Validate transformer outputs
+					// The component instance that will be returned by this function.
+					// It will be automatically called if instanceIns aliased port names
+					// properties changes in the scope (but only if the instance is not inhibited).
 					function componentInstance() {
-						var ins = parseInput(instanceIns, arguments);
+						var ins = validateInput(instanceIns, arguments);
 						var outs = transformer.apply(componentInstance, ins);
-						return parseOutput(component.outs, outs, options.portsAlias);
+						return validateAndAliasOutput(component.outs, outs, options.portsAlias);
 					};
 
 					componentInstance.component = component;
@@ -203,66 +204,65 @@ flo.provider('$component', ['$injector', function($injector) {
 					componentInstance.getInNamed = getPortNamedFactory(instanceIns);
 					componentInstance.getOutNamed = getPortNamedFactory(instanceOuts);
 
-					// Apply wathers to scope
-					if (scope) {
-						// Remove componet on scope destroy
-						(scope.$components = scope.$components || []).push(componentInstance);
-						scope.$on('$destroy', function() {
-							scope.$components.splice(scope.$components.indexOf(componentInstance), 1);
+					// Early exit if no scope is specified
+					// This way the component can be used only as a function to manually
+					// convert validated inputs to a validated output object
+					if (!scope) return componentInstance;
+
+					// The given scope will be decorated with a $components array containing
+					// instances of components attached to the scope.
+					(scope.$components = scope.$components || []).push(componentInstance);
+					scope.$on('$destroy', function() {
+						scope.$components.splice(scope.$components.indexOf(componentInstance), 1);
+					});
+
+					// insExp will be an expression string of an array that can be watched
+					// to monitor input changes. If no such expression can be build we exit.
+					var insExp = insWatchExpression(instanceIns);
+					if (!insExp) return componentInstance;
+
+					// Function to start watching for inputs changes and extend the scope
+					// with validated output object.
+					var watchIns = function() {
+						return scope.$watchCollection(insExp, function(ins, oldIns) {
+							var outs = componentInstance.apply(scope, ins);
+							angular.extend(scope, outs);
 						});
+					}
 
-						if (insExp) {
-							var cancelInsWatcher;
+					// If auto inhibition should not be adopted, start watching ins and return.
+					if (options.noInhibition == true || instanceOuts.length == 0) {
+						watchIns();
+						return componentInstance;
+					}
 
-							var watchIns = function() {
-								return scope.$watchCollection(insExp, function(ins, oldIns) {
-									// Get outputs
-									var outs = componentInstance.apply(scope, ins);
-									// Push output to scope
-									angular.extend(scope, outs);
-								});
-							}
-
-							if (options.noInhibition !== true && instanceOuts.length > 0) {
-								// Check if to de-inhibit the component
-								scope.$watchCollection('$$watchers', function(watchers) {
-									var shouldInhibit = true;
-									for (var i = watchers.length - 1; i >= 0; i--) {
-										if (angular.isString(watchers[i].exp)
-											&& componentInstance.getOutNamed(watchers[i].exp)) {
-											shouldInhibit = false;
-											break;
-										}
-									}
-									if (shouldInhibit) {
-										if (angular.isFunction(cancelInsWatcher)) {
-											cancelInsWatcher();
-											cancelInsWatcher = null;
-										}
-									} else if (!cancelInsWatcher) {
-										cancelInsWatcher = watchIns();
-									}
-								});
-							} else {
-								watchIns();
+					// To auto inhibit, see if direct scope watchers contains any aliased
+					// output port. This will not work if the output ports are watched via
+					// a path through a parent scope.
+					var cancelWatchIns;
+					scope.$watchCollection('$$watchers', function(watchers) {
+						var shouldInhibit = true;
+						for (var exp, i = watchers.length - 1; i >= 0; i--) {
+							exp =watchers[i].exp;
+							if (angular.isString(exp) && componentInstance.getOutNamed(exp)) {
+								shouldInhibit = false;
+								break;
 							}
 						}
-					}
-					//
+						if (shouldInhibit) {
+							if (angular.isFunction(cancelWatchIns)) {
+								cancelWatchIns();
+								cancelWatchIns = null;
+							}
+						} else if (!cancelWatchIns) {
+							cancelWatchIns = watchIns();
+						}
+					});
+
 					return componentInstance;
 				}
 
-				// Add metadata to component isntance
-				function getPortNamedFactory(ports) {
-					return function(name) {
-						if (!ports) return;
-						for (var i = ports.length - 1; i >= 0; i--) {
-							if (ports[i].name === name) {
-								return ports[i];
-							}
-						}
-					}
-				}
+				// Add metadata to component constructor
 				component.ins = angular.copy(componentSettings.ins);
 				component.getInNamed = getPortNamedFactory(component.ins);
 				component.outs = angular.copy(componentSettings.outs);
@@ -276,14 +276,34 @@ flo.provider('$component', ['$injector', function($injector) {
 
 	return new $ComponentProvider;
 
+	// Genrates a funciton that will search for a port with a provided name
+	function getPortNamedFactory(ports) {
+		return function(name) {
+			if (!ports) return;
+			for (var i = ports.length - 1; i >= 0; i--) {
+				if (ports[i].name === name) {
+					return ports[i];
+				}
+			}
+		}
+	}
+
+	// From an array of port names or port objects, the function generates
+	// an array of validated port objects. The validation will check:
+	// 	* That ports is an array
+	// 	* That port names are valid (no spaces or points allawed)
+	// 	* That port names are unique (case insensitive)
+	// 	* That port names are unique from other validated ports array if provided.
 	function validateComponentPorts(ports, otherValidatedPorts) {
-		if (!ports) return null;
+		if (!ports) return [];
+
 		if (!angular.isArray(ports)) {
 			throw "$componentProvider: Invalid ports: " + ports
 		}
+
 		var validatedPorts = [];
-		for (var port, i = ports.length - 1; i >= 0; i--) {
-			port = ports[i];
+		angular.forEach(ports, function(port) {
+			// Generate validable port object
 			if (angular.isString(port)) {
 				port = { name: port, validate: TYPE_ANY };
 			} else if (!angular.isString(port.name)) {
@@ -291,29 +311,35 @@ flo.provider('$component', ['$injector', function($injector) {
 			} else if (!angular.isDefined(port.validate)) {
 				port.validate = TYPE_ANY
 			}
-			if (port.name.match(/\s+/) != null) {
+			// Validate port name syntax
+			if (port.name.match(/[\s\.]/) != null) {
 				throw "$componentProvider: Port name must not contain spaces; got: " + port.name
 			}
+			// Validate port name uniqueness in previously validated ports
+			var lowerPortName = port.name.toLowerCase();
 			angular.forEach(validatedPorts, function(vp) {
-				if (vp.name == port.name) {
+				if (vp.name.toLowerCase() == lowerPortName) {
 					throw "$componentProvider: Duplicated port name: " + port.name;
 				}
 			});
-			// check for duplicate input/output ports
+			// Validate port name uniqueness in additional ports input
 			if (angular.isArray(otherValidatedPorts)) {
-				for (var j = otherValidatedPorts.length - 1; j >= 0; j--) {
-					if (otherValidatedPorts[j].name == port.name) {
+				angular.forEach(otherValidatedPorts, function(vp) {
+					if (vp.name.toLowerCase() == lowerPortName) {
 						throw "$componentProvider: Duplicated port name: " + port.name;
 					}
-				}
+				});
 			}
-			// Add to validation
-			validatedPorts.unshift(port);
-		}
+			// Port is validated
+			validatedPorts.push(port);
+		});
 		return validatedPorts;
 	}
 
-	function buildInsExpression(ins) {
+	// Construct an AngularJS watchable expression in the form:
+	// `[inputName,inputName2,...]`. This expression can be watched with a
+	// `scope.$watchCollection` to receive input ports updates.
+	function insWatchExpression(ins) {
 		var insExp = null;
 		if (angular.isArray(ins)) {
 			insExp = ']';
@@ -332,7 +358,9 @@ flo.provider('$component', ['$injector', function($injector) {
 		return insExp
 	}
 
-	function aliasPorts(ports, aliases) {
+	// Given a validated ports array and a map of port name to aliases, returns
+	// a validated ports array with substituted names.
+	function aliasPorts(ports, aliases, otherValidatedPorts) {
 		if (!aliases) return ports;
 		var alias;
 		angular.forEach(ports, function(port) {
@@ -341,23 +369,20 @@ flo.provider('$component', ['$injector', function($injector) {
 				port.name = alias;
 			}
 		});
-		return ports;
+		return validateComponentPorts(ports, otherValidatedPorts);
 	}
 
-	function parseInput(ins, values) {
-		if (!angular.isArray(ins)) {
-			return values;
-		}
-		var validated = [];
-		for (var port, i = ins.length - 1; i >= 0; i--) {
-			port = ins[i];
-			checkPortType(port, values[i]);
-			validated.unshift(values[i]);
-		}
-		return validated;
+	// Check that the input values array have a correct type for the port in the same
+	// position. Returns values or throw.
+	function validateInput(ins, values) {
+		angular.forEach(ins, function(port, i) {
+			validateValueForPort(port, values[i]);
+		});
+		return values;
 	}
 
-	function parseOutput(outs, value, aliases) {
+	function validateAndAliasOutput(outs, value, aliases) {
+		// Build validable output value
 		if (!angular.isObject(value)) {
 			var outputName = DEFAULT_OUT,
 			    output = {};
@@ -367,38 +392,36 @@ flo.provider('$component', ['$injector', function($injector) {
 			output[outputName] = value;
 			value = output;
 		}
+		// Generate a validated output object containing only expected output
 		var validated = {};
-		if (angular.isArray(outs)) {
-			for (var port, i = outs.length - 1; i >= 0; i--) {
-				port = outs[i];
-				checkPortType(port, value[port.name]);
-				validated[port.name] = value[port.name];
+		angular.forEach(outs, function(port) {
+			validateValueForPort(port, value[port.name]);
+			validated[port.name] = value[port.name];
+		});
+		// Aliases output port names if needed
+		if (!aliases) return validated;
+
+		var aliased = {}, alias;
+		angular.forEach(validated, function(val, key) {
+			alias = aliases[key];
+			if (alias) {
+				aliased[alias] = val;
+			} else {
+				aliased[key] = val;
 			}
-		} else {
-			validated = value; // TODO angular.copy(value)?
-		}
-		if (aliases) {
-			var aliased = {}, alias;
-			angular.forEach(validated, function(val, key) {
-				alias = aliases[key];
-				if (alias) {
-					aliased[alias] = val;
-				} else {
-					aliased[key] = val;
-				}
-			});
-			validated = aliased;
-		}
-		return validated;
+		});
+		return aliased;
 	}
 
-	function checkPortType(port, value) {
+	// Throws if the provided value is not validated by the port `validate` property.
+	function validateValueForPort(port, value) {
 		if (angular.isDefined(value) && (
 			(angular.isFunction(port.validate) && !port.validate(value))
 			||
 			(value && angular.isString(port.validate) && port.validate != TYPE_ANY && typeof value != port.validate)
 		)) {
-			throw "Type error!! TODO make me better: " + port.name;
+			throw "$component: Invalid value for port '" + port.name + "'" +
+			(angular.isString(port.validate) ? (" expected " + port.validate) : "");
 		}
 	}
 }]);

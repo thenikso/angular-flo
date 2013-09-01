@@ -129,9 +129,11 @@ describe('$controller', function () {
 				expect(function() { componentProvider.register('name') }).toThrow();
 				expect(function() { componentProvider.register(3, function(){}) }).toThrow();
 				expect(function() { componentProvider.register('name', ['with space'], ['out'], function(){}) }).toThrow();
-				expect(function() { componentProvider.register('name', ['equal'], ['equal'], function(){}) }).toThrow();
-				expect(function() { componentProvider.register('name', ['equal', 'equal'], ['out'], function(){}) }).toThrow();
-				expect(function() { componentProvider.register('name', ['in'], ['equal', 'equal'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['with.point'], ['out'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['equal'], ['Equal'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['equal', 'Equal'], ['out'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', ['in'], ['Equal', 'equal'], function(){}) }).toThrow();
+				expect(function() { componentProvider.register('name', [3], [], function(){}) }).toThrow();
 			});
 		});
 
@@ -172,7 +174,7 @@ describe('$controller', function () {
 			it('should be called with valid input', function() {
 				test.inst('test');
 				expect(test.inst).toHaveBeenCalledWith('test');
-				expect(test.tran).toHaveBeenCalledWith('test', undefined);
+				expect(test.tran).toHaveBeenCalledWith('test');
 				expect(test.typeSpy).not.toHaveBeenCalled();
 				test.inst('test', null);
 				expect(test.inst).toHaveBeenCalledWith('test', null);
@@ -180,10 +182,10 @@ describe('$controller', function () {
 				expect(test.typeSpy).toHaveBeenCalledWith(null);
 				test.inst(null);
 				expect(test.inst).toHaveBeenCalledWith(null);
-				expect(test.tran).toHaveBeenCalledWith(null, undefined);
+				expect(test.tran).toHaveBeenCalledWith(null);
 				test.inst();
 				expect(test.inst).toHaveBeenCalledWith();
-				expect(test.tran).toHaveBeenCalledWith(undefined, undefined);
+				expect(test.tran).toHaveBeenCalledWith();
 			});
 
 			it('should throw if called with invalid input', function() {
@@ -308,6 +310,27 @@ describe('$controller', function () {
 				expect(test.scope.output).not.toBeDefined();
 				expect(test.trans).toHaveBeenCalledWith("foo", "bar");
 				expect(test.outputWatcher).toHaveBeenCalledWith("bar", "bar");
+			});
+
+			it('should throw if port aliases are invalid port names', function() {
+			  expect(function() {
+			  	test.comp(test.scope, {
+			  		portsAlias: {
+			  			"input": "in.1",
+			  			"other": "in 2",
+			  			output: "out"
+			  		}
+			  	});
+			  }).toThrow();
+			  expect(function() {
+			  	test.comp(test.scope, {
+			  		portsAlias: {
+			  			"input": "in1",
+			  			"other": "in2",
+			  			output: "in1"
+			  		}
+			  	});
+			  }).toThrow();
 			});
 
 		});
