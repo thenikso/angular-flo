@@ -11,8 +11,8 @@ module.exports = function(config) {
 		files: [
 			'bower_components/angular/angular.js',
 			'bower_components/angular-mocks/angular-mocks.js',
-			'angular-flo.js',
-			'angular-flo.spec.js'
+			'src/angular-flo.js',
+			'spec/angular-flo.spec.js'
 		],
 
 		// list of files to exclude

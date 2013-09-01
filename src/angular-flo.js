@@ -1,5 +1,3 @@
-(function(angular, window, document, undefined) {'use strict';
-
 var TYPE_ANY = 'all',
     DEFAULT_OUT = 'out';
 
@@ -554,6 +552,10 @@ flo.provider('$network', function() {
 		return this;
 	};
 
+	network.prototype.export = function(scope, exportMap) {
+		// body...
+	};
+
 	network.prototype.empty = function() {
 		for (var to in this.$scope.$connections) {
 			this.$scope.$connections[to].$destroy();
@@ -627,7 +629,5 @@ flo.directive('floNetwork', function() {
 		}
 	};
 });
-
-})(angular, window, document);
 
 angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";flo-network,[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');

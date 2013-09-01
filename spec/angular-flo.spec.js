@@ -375,6 +375,7 @@ describe('$network', function() {
 		expect(angular.isFunction(net.connection)).toBeTruthy();
 		expect(angular.isFunction(net.data)).toBeTruthy();
 		expect(angular.isFunction(net.import)).toBeTruthy();
+		expect(angular.isFunction(net.export)).toBeTruthy();
 		expect(angular.isFunction(net.empty)).toBeTruthy();
 		expect(angular.isFunction(net.graph)).toBeTruthy();
 	});
@@ -470,6 +471,14 @@ describe('$network', function() {
 			net.$scope.$digest();
 			expect(comp.one).toHaveBeenCalledWith('1', '2');
 		});
+
+		// it('should export data to a scope', function() {
+		// 	net.data('foo', 'p1.in1');
+		// 	// net.export(scope, { 'p1.out': 'localOut' });
+		// 	net.export(scope, "{ 'p2.out': localOut2 }");
+		// 	net.$scope.$digest();
+		// 	expect(scope.localOut2).toEqual('foo');
+		// });
 
 	});
 

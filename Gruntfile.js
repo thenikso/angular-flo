@@ -9,6 +9,17 @@ module.exports = function (grunt) {
         singleRun: true
       }
     },
+    concat: {
+      options: {
+        separator: ';',
+        banner: '(function(angular, window, document, undefined) {"use strict";',
+        footer: '})(angular, window, document);'
+      },
+      dist: {
+        src: ['src/angular-flo.js'],
+        dest: 'angular-flo.js',
+      },
+    },
     ngmin: {
       dist: {
         files: {
@@ -34,6 +45,7 @@ module.exports = function (grunt) {
   ]);
 
   grunt.registerTask('build', [
+    'concat',
     'ngmin',
     'uglify'
   ]);
