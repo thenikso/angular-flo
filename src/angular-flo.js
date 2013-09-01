@@ -156,6 +156,22 @@ flo.provider('$component', ['$injector', function($injector) {
 			 *
 			 * The results of applying a component to a scope is another function that
 			 * performs the validated transform function.
+			 *
+			 * Components are designed mainly to be used in conjunction with
+			 * {@link flo.$network $network} but they can also be used independently
+			 * on regular scopes:
+			 *
+			 * @example
+			 * <pre>
+			 * // A component attached to a scope that will get inputs from `$scope.aLocalModel`
+			 * // and push its output to `$scope.anotherLocalModel`.
+			 * $component('aComponent')($scope, {
+			 * 	noInhibition: true,
+			 * 	portsAlias: {
+			 * 		'in': 'aLocalModel',
+			 * 		'out': 'anotherLocalModel'
+			 * 	}});
+			 * </pre>
 			 */
 			return function(name, locals) {
 				var componentSettings = null;
@@ -196,7 +212,8 @@ flo.provider('$component', ['$injector', function($injector) {
 						return validateAndAliasOutput(component.outs, outs, options.portsAlias);
 					};
 
-					componentInstance.component = component;
+					componentInstance.componentName = name;
+					componentInstance.baseComponent = component;
 					componentInstance.ins = instanceIns;
 					componentInstance.outs = instanceOuts;
 					componentInstance.getInNamed = getPortNamedFactory(instanceIns);
@@ -261,6 +278,7 @@ flo.provider('$component', ['$injector', function($injector) {
 				}
 
 				// Add metadata to component constructor
+				component.componentName = name;
 				component.ins = angular.copy(componentSettings.ins);
 				component.getInNamed = getPortNamedFactory(component.ins);
 				component.outs = angular.copy(componentSettings.outs);
@@ -426,26 +444,73 @@ flo.provider('$component', ['$injector', function($injector) {
 
 flo.provider('$network', function() {
 
-	function network($rootScope, $component, name, graphOrDecl) {
+	/**
+	 * @ngdoc object
+	 * @name flo.$network
+	 * @requires $rootScope, $component
+	 *
+	 * @param {string=} name The name of the network.
+	 *
+	 * @param {Object=|stirng=} graphOrFbp If an object, it will be passed to the
+	 * 		{@link flo.$network#graph graph} method. If a string it will be passed to
+	 * 		{@link flo.$network#fbp fbp}.
+	 *
+	 * @description
+	 * `$network` service is responsible for declaring component processes and connect
+	 * them via connections.
+	 *
+	 * @example
+	 * <pre>
+	 * // A network that will watch for `$scope.nameModel` changes and will update
+	 * // `$scope.greeting` with the result of the network computation.
+	 * $network('Green')
+	 * 	.process('Exclamate', 'string-append')
+	 * 	.process('Shout', 'string-uppercase')
+	 * 	.connection('Exclamate.out', 'Shout.in')
+	 * 	.data('!', 'Exclamate.second')
+	 * 	.import($scope, { 'Exclamate.first':'nameModel' })
+	 * 	.export($scope, { 'greeting':'Shout.out' });
+	 * </pre>
+	 */
+	function network($rootScope, $component, name, graphOrFbp) {
 		this.$scope = $rootScope.$new(true);
 		this.$component = $component;
 
 		if (angular.isDefined(name)) {
 			this.$scope.$network = name;
 		}
+
 		this.$scope.$processes = {};
-		this.$scope.$connections = {}; // to -> {from: data:}
-		if (angular.isObject(graphOrDecl)) {
-			this.graph(graphOrDecl);
-		} else if (angular.isString(graphOrDecl)) {
-			// TODO this.decl ...
+		this.$scope.$connections = {};
+
+		if (angular.isObject(graphOrFbp)) {
+			this.graph(graphOrFbp);
+		} else if (angular.isString(graphOrFbp)) {
+			// TODO this.fbp(graphOrFbp)
 		}
-		// TODO watch/parse graph if present
 	}
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#process
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * Creates a process out of a {@link flo.$component component} in the network.
+	 * The process has its own isolated scope.
+	 *
+	 * @param {!string} name The name to identify the process. This name will be
+	 * 		used to identify the process when building connections.
+	 * @param {!string|!function} component If called with a string, the name of a
+	 * 		component to instantiate for the process. If called with a function, it
+	 * 		will be considered as the transformer function of an anonymous component.
+	 * @param {Object=} options Optional object. If preset they are passed to the
+	 * 		component instantiation function.
+	 * @returns {*} the network.
+	 */
 	network.prototype.process = function(name, component, options) {
 		var self = this;
-		// Get component
+		// Get component or build an anonymous one
 		if (angular.isString(component) || angular.isFunction(component)) {
 			component = this.$component(component);
 		}
@@ -468,17 +533,37 @@ flo.provider('$network', function() {
 		return this;
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#connection
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * Creates a connection between two {@link flo.$network processes} ports.
+	 * The process in the `from` argument will forward the output of the specified
+	 * port to the specified input port of the process in the `to` argument.
+	 *
+	 * Only one connection per input port is allowed. This may change in the future.
+	 *
+	 * @param {!string} from The path of the `<process name>.<output port>` to connect from.
+	 * @param {!string} to The path to connect to.
+	 * @returns {*} the network.
+	 */
 	network.prototype.connection = function(from, to) {
 		var self = this,
 		    target = parseProcessPath(to),
 		    processScope = this.$scope.$processes[target.process];
+		// Normalize destination path
 		to = target.process + '.' + target.port;
+		// Do not allaw overriding of existing connections.
 		if (angular.isDefined(this.$scope.$connections[to])) {
 			throw "$network: A connection to `" + to + "` is already present";
 		}
+		// Actual port value connection
 		var endConnection = this.probe(from, function(value) {
 			processScope[target.port] = value;
 		});
+		// Connection object to manage the connection
 		var connection = {
 			from: from,
 			$destroy: function() {
@@ -490,6 +575,21 @@ flo.provider('$network', function() {
 		return this;
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#data
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * Sets the value of the input process port to a constant and occupy the
+	 * connection.
+	 *
+	 * Only one connection per input port is allowed. This may change in the future.
+	 *
+	 * @param {!*} data The data value to set.
+	 * @param {!string} to The path to connect to.
+	 * @returns {*} the network.
+	 */
 	network.prototype.data = function(data, to) {
 		var self = this,
 		    target = parseProcessPath(to);
@@ -498,7 +598,6 @@ flo.provider('$network', function() {
 			throw "$network: A connection to `" + to + "` is already present";
 		}
 		this.$scope.$processes[target.process][target.port] = data;
-		//
 		var connection = {
 			data: data,
 			$destroy: function() {
@@ -509,7 +608,21 @@ flo.provider('$network', function() {
 		return this;
 	};
 
-	network.prototype.probe = function(path, handler) {
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#probe
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * Watches any process port in the network and pass the current value to the
+	 * listener function.
+	 *
+	 * @param {!string} path The path of the `<process name>.<port name>` to probe.
+	 * @param {!function} to A function that will be called with current and past
+	 * 		value of the port when it changes.
+	 * @returns {function} A function that can be used to remove the probe.
+	 */
+	network.prototype.probe = function(path, listener) {
 		path = parseProcessPath(path);
 		var processScope = this.$scope.$processes[path.process];
 		if (!angular.isDefined(processScope)) {
@@ -519,13 +632,30 @@ flo.provider('$network', function() {
 		&& !angular.isDefined(processScope.$components[0].getOutNamed(path.port))) {
 			throw "$network: Invalid port to probe `" + path.port + "` for process `" + path.process + "`";
 		}
-		return processScope.$watch(path.port, handler);
+		return processScope.$watch(path.port, listener);
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#import
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * A way to import local scope values to a specific process input port in the
+	 * network.
+	 *
+	 * Only non connected input ports in the network can be targetted by imports.
+	 *
+	 * @param {!Object} scope The scope form which to import values.
+	 * @param {!Object|!string} importMap If called with an object, it should be a
+	 * 		process port path string to scope property name string map. Otherwise
+	 * 		it will be directly watched in the given scope.
+	 * @returns {*} the network.
+	 */
 	network.prototype.import = function(scope, importMap) {
 		if (!importMap || angular.equals({}, importMap)) return this;
 
-		if (!angular.isString(importMap)) {
+		if (angular.isObject(importMap)) {
 			var importMapString = '{';
 			angular.forEach(importMap, function(scopeVar, path) {
 				importMapString += "'" + path + "':" + scopeVar + ",";
@@ -539,6 +669,9 @@ flo.provider('$network', function() {
 			if (!angular.isObject(map)) return cancelWatcher();
 			angular.forEach(map, function(scopeVar, path) {
 				path = parseProcessPath(path);
+				if (angular.isDefined(self.$scope.$connections[path.process+'.'+path.port])) {
+					throw "$network: Importing in an already connected input port: " + path;
+				}
 				var processScope = self.$scope.$processes[path.process];
 				if (processScope) {
 					processScope[path.port] = scopeVar;
@@ -549,6 +682,20 @@ flo.provider('$network', function() {
 		return this;
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#export
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * A way to export specific process output ports values to a local scope properties.
+	 *
+	 * @param {!Object} scope The scope to which export values.
+	 * @param {!Object|!string} exportMap If called with an object, it should be a
+	 * 		scope property name string to process port path string map. Otherwise
+	 * 		it will be evalued in the given scope and converted to an object.
+	 * @returns {*} the network.
+	 */
 	network.prototype.export = function(scope, exportMap) {
 		if (!exportMap || angular.equals({}, exportMap)) return this;
 
@@ -566,8 +713,20 @@ flo.provider('$network', function() {
 				});
 			}
 		});
+
+		return this;
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#empty
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * Removes every process and connection from the network.
+	 *
+	 * @returns {*} the network.
+	 */
 	network.prototype.empty = function() {
 		for (var to in this.$scope.$connections) {
 			this.$scope.$connections[to].$destroy();
@@ -575,16 +734,64 @@ flo.provider('$network', function() {
 		for (var name in this.$scope.$processes) {
 			this.$scope.$processes[name].$destroy();
 		}
+		return this;
 	};
 
+	/**
+	 * @ngdoc method
+	 * @name AUTO.$network#graph
+	 * @methodOf AUTO.$network
+	 *
+	 * @description
+	 * A network can be described as a JSON object containing `processes` and
+	 * `connections` like:
+	 *
+	 * ```
+	 {
+	 	"processes": {
+	 		"Exclamate": { "component":"string-append" },
+	 		"Shout": { "component":"string-uppercase" }
+	 	},
+	 	"connections": {
+	 		"Shout.in": { "form": "Exclamate.out" },
+	 		"Exclamate.second": { "data": "!" }
+	 	}
+	 }
+	 * ```
+	 *
+	 * This method can set the network according to one such object or return
+	 * the current network configuration. Loadind a graph in a network will substitute
+	 * its current configuration.
+	 *
+	 * @param {Object=} graph The graph to load in the network. If not set, a
+	 * 		serialization of the network will be returned.
+	 * @returns {Object} The network if called with an argument. Otherwise the object
+	 * 		serialization of the current network configuration.
+	 */
 	network.prototype.graph = function(graph) {
 		if (arguments.length == 0) {
-			return this.$scope.graph;
+			graph = {};
+			angular.forEach(this.$scope.$processes, function(pscope, pname) {
+				graph.processes = (graph.processes || {})
+				graph.processes[pname] = {
+					component: pscope.$components[0].componentName
+				};
+			});
+			angular.forEach(this.$scope.$connections, function(connection, to) {
+				connection = angular.copy(connection);
+				delete connection.$destroy;
+				graph.connections = (graph.connections || {})
+				graph.connections[to] = connection;
+			});
+			return graph;
 		}
+
 		if (!angular.isObject(graph)) {
 			throw "$network: Invalid graph: " + graph;
 		}
+
 		this.empty();
+
 		if (angular.isObject(graph.processes)) {
 			var process;
 			for (var name in graph.processes) {
@@ -592,6 +799,7 @@ flo.provider('$network', function() {
 				this.process(name, process.component, process.portsAlias);
 			}
 		}
+
 		if (angular.isObject(graph.connections)) {
 			for (var to in graph.connections) {
 				var con = graph.connections[to];
@@ -602,7 +810,7 @@ flo.provider('$network', function() {
 				}
 			}
 		}
-		this.$scope.graph = graph;
+
 		return this;
 	};
 
@@ -616,6 +824,8 @@ flo.provider('$network', function() {
 
 	return networkProvider;
 
+	// A process path should have a format like `processName.portName`. This function
+	// parses such strings and returns an object with `process` and `port` stirngs.
 	function parseProcessPath(path) {
 		var dot;
 		if(!angular.isString(path)

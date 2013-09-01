@@ -17,6 +17,7 @@ describe('$controller', function () {
 			var c = $component(name);
 			expect(c).toBeDefined();
 			expect(angular.isFunction(c)).toBeTruthy();
+			expect(c.componentName).toEqual(name);
 			expect(c.ins).toEqual(ins);
 			expect(c.outs).toEqual(outs);
 			expect(angular.isFunction(c.getInNamed)).toBeTruthy();
@@ -472,6 +473,11 @@ describe('$network', function() {
 			expect(comp.one).toHaveBeenCalledWith('1', '2');
 		});
 
+		it('should throw if importing data to an already connected port', function() {
+			net.import(scope, { 'p2.in2': 'foo' });
+			expect(function() { scope.$digest(); }).toThrow();
+		});
+
 		it('should export data to a scope', function() {
 			net.data('foo', 'p1.in1');
 			net.export(scope, { 'localOut':'p1.out' });
@@ -513,6 +519,21 @@ describe('$network', function() {
 			expect(net.$scope.$processes.p2).toBeDefined();
 			expect(net.$scope.$connections['p1.in1']).toBeDefined();
 			expect(net.$scope.$connections['p2.in2']).toBeDefined();
+		});
+
+		it('should return the graph of the network', function() {
+			net.process('p1', 'one');
+			net.process('p2', 'two');
+			net.connection('p1.out', 'p2.in2');
+			expect(net.graph()).toEqual({
+				processes: {
+					'p1': { component: 'one' },
+					'p2': { component: 'two' }
+				},
+				connections: {
+					'p2.in2': { from: 'p1.out' }
+				}
+			});
 		});
 
 	});
