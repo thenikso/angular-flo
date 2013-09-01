@@ -100,7 +100,7 @@ rightlet
   = port:port _ proc:node  { return proc+'.'+port }
 
 node
-  = node:[a-zA-Z]+ comp:component? { if(comp){parser.addNode(node.join(""),comp);}; return node.join("")}
+  = node:[a-zA-Z0-9]+ comp:component? { if(comp){parser.addNode(node.join(""),comp);}; return node.join("")}
 
 component
   = "(" comp:([a-zA-Z/\-]+)? meta:compMeta? ")" { var o = {}; comp ? o.comp = comp.join("") : o.comp = ''; meta ? o.meta = meta.join("").split(',') : null; return o; }
@@ -110,7 +110,7 @@ compMeta
 
 
 port
-  = portname:[A-Z.0-9]+ __ {return portname.join("").toLowerCase()}
+  = portnamestart:[A-Z] portnamerest:[A-Z0-9]* __ {return (portnamestart[0]+portnamerest.join("")).toLowerCase()}
 
 anychar
   = [a-zA-Z0-9 .,#:{}@+?!^=()_\-$*/\\\[\]{}\"&`%\|]

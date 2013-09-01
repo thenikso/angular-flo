@@ -379,6 +379,7 @@ describe('$network', function() {
 		expect(angular.isFunction(net.export)).toBeTruthy();
 		expect(angular.isFunction(net.empty)).toBeTruthy();
 		expect(angular.isFunction(net.graph)).toBeTruthy();
+		expect(angular.isFunction(net.fbp)).toBeTruthy();
 	});
 
 	describe('processes', function() {
@@ -519,6 +520,22 @@ describe('$network', function() {
 			expect(net.$scope.$processes.p2).toBeDefined();
 			expect(net.$scope.$connections['p1.in1']).toBeDefined();
 			expect(net.$scope.$connections['p2.in2']).toBeDefined();
+			inject(function($network) {
+				net = $network('Test2', {
+					processes: {
+						'p1': { component: 'one' },
+						'p2': { component: 'two' }
+					},
+					connections: {
+						'p2.in2': { from: 'p1.out' },
+						'p1.in1': { data: 'foo' }
+					}
+				});
+				expect(net.$scope.$processes.p1).toBeDefined();
+				expect(net.$scope.$processes.p2).toBeDefined();
+				expect(net.$scope.$connections['p1.in1']).toBeDefined();
+				expect(net.$scope.$connections['p2.in2']).toBeDefined();
+			});
 		});
 
 		it('should return the graph of the network', function() {
@@ -535,6 +552,26 @@ describe('$network', function() {
 				}
 			});
 		});
+
+	});
+
+	describe('fbp', function() {
+
+		it('should define a network from an FBP string', function() {
+			net.fbp("'foo' -> IN1 p1(one) OUT -> IN2 p2(two)");
+			expect(net.$scope.$processes.p1).toBeDefined();
+			expect(net.$scope.$processes.p2).toBeDefined();
+			expect(net.$scope.$connections['p1.in1']).toBeDefined();
+			expect(net.$scope.$connections['p2.in2']).toBeDefined();
+		});
+
+		// it('should return the FBP serialization of the graph', function() {
+		// 	net.process('p1', 'one');
+		// 	net.process('p2', 'two');
+		// 	net.connection('p1.out', 'p2.in2');
+		// 	net.data('foo', 'p1.in1');
+		// 	expect(net.fbp()).toEqual("'foo' -> IN1 p1(one) OUT -> IN2 p2(two)");
+		// });
 
 	});
 

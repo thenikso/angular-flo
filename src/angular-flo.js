@@ -814,6 +814,14 @@ flo.provider('$network', function() {
 		return this;
 	};
 
+	network.prototype.fbp = function(fbp) {
+		if (arguments.length == 0) {
+			return "IMPLEMENT ME";
+		}
+		if (typeof fbpParser == 'undefined') return this;
+		return this.graph(fbpParser.parse(fbp));
+	};
+
 	var networkProvider = {
 		$get: ['$rootScope', '$component', function($rootScope, $component) {
 			return function(name, graph) {

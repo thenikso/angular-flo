@@ -12,6 +12,7 @@ module.exports = function(config) {
 			'bower_components/angular/angular.js',
 			'bower_components/angular-mocks/angular-mocks.js',
 			'src/angular-flo.js',
+			'.tmp/fbpParser.js',
 			'spec/angular-flo.spec.js'
 		],
 
