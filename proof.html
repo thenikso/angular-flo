@@ -4,6 +4,15 @@
 </head>
 <body ng-app="App" ng-controller="Ctrl">
 
+	<flo-network name="salute"
+	             import="{ 'Join.first':myName }"
+	             export="{ 'greeting': 'Shout.out' }">
+		'!!!' -> SECOND Join(strings/Join) OUT -> IN Shout(strings/UpperCase)
+	</flo-network>
+
+	<div>what's your name? <input type="text" ng-model="myName"></div>
+	<div>hey {{greeting}}</div>
+
 	<input type="text" ng-model="in">
 	<div>{{in}}</div>
 	<div>{{out}}</div>
@@ -25,12 +34,26 @@
 	angular.module('App', ['ngFlo', 'moar'])
 
 	.config(function($componentProvider) {
-		$componentProvider.register('mycomp', [{name:'in', type:'string'}], [{ name:'out', type:'string'}], function(i) {
+		$componentProvider.register('mycomp', [{name:'in', validate:'string'}], [{ name:'out', validate:'string'}], function(i) {
 			if (!angular.isDefined(i)) return;
 			return {
 				out: i.toUpperCase()
 			};
 		});
+
+		$componentProvider.register('strings/Join',
+			[{ name:'first', validate:'string' }, { name:'second', validate:'string' }],
+			[{ name:'out', validate:'string' }],
+			function(first, second) {
+				return (first || '') + (second || '');
+			});
+
+		$componentProvider.register('strings/UpperCase',
+			[{ name:'in', validate:'string' }],
+			[{ name:'out', validate:'string' }],
+			function(string) {
+				return (string || '').toUpperCase();
+			});
 	})
 
 	.controller('Ctrl', function($scope, $component, $network) {
