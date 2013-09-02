@@ -12,7 +12,7 @@ First of all, include `angular-flo.js` in your HTML file. Angular Flo requires A
  <script src="angular-flo.js"></script>
 ```
 
-You may also want to include some component collection modules or [create your own](#$componentProvider).
+You may also want to include some component collection modules or [create your own](#componentprovider).
 
 ```
  TODO
