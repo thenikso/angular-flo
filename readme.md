@@ -18,7 +18,7 @@ You may also want to include some component collection modules or [create your o
  TODO
 ```
 
-The `flo-network` directive can now be used to specify networks directly in the HTML file using the [FPB]() domain-specific language.
+The `flo-network` directive can then be used to specify networks directly in the HTML file using the [FPB]() domain-specific language.
 
 ```
  <flo-network name="salute"
@@ -147,3 +147,31 @@ $componentProvider.register({
 ```
 
 Every component defined this way will be available via `$component` using the component name.
+
+## Build and Test
+
+To build the library, first of all you need to setup you environment. Execute the following commands:
+
+- `nom install` to install all required dev packages with [NPM](https://npmjs.org);
+- `grunt build` to execute the [Grunt](http://gruntjs.com/) build task.
+
+To test:
+
+- `bower install` to install the javascript requirements with [bower](http://bower.io/);
+- `karma start` to start the tests with [Karma](http://karma-runner.github.io/0.10/index.html), this may need a build phase first.
+
+## Motivation
+
+One of the many reason why AngularJS is such a great framework, is its ability to naturally modularize your code in meaningful ways. If it has to do with DOM, it's in a directive; if it's model data, look at the controller's scope; if it's a shared service… it's a service or factory.
+
+The rest, that is glue code and business logic, usually ends up in controllers. Despite the fact that, thanks to AngularJS magic, this code is not as much as it used to be; Angular Flo propose a possible solution to modularize it too. By using concepts from [Flow Based Programming](http://en.wikipedia.org/wiki/Flow-based_programming) pioneered by [J. Paul Morrison](http://www.jpaulmorrison.com/fbp/), Angular Flo would like to substitute your glue and business logic code with declarative networks build out of reusable and modular components.
+
+## Future Work
+
+What this project would like to experiment is if FBP could be successfully used to build web applications. To make the experiment meaningful, the following milestones should be reached:
+
+- Build a relevant amount of useful, reusable components;
+- Complete Angular Flo to be editable on the fly;
+- Construct a UI (possibly a bookmarklet) to edit Angular Flo networks (and components) in a visual manner.
+
+Feel free to comment or contribute in any way.
