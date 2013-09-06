@@ -17,6 +17,7 @@ flo.provider('$component', ['$injector', function($injector) {
 	 * {@link ngFlo.$componentProvider#register register} method.
 	 */
 	function $ComponentProvider() {
+		var $componentProvider = this;
 
 		/**
 		 * @ngdoc function
@@ -114,7 +115,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			return this;
 		};
 
-		this.$get = function() {
+		this.$get = function () {
 
 			/**
 			 * @ngdoc function
@@ -173,7 +174,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			 * 	}});
 			 * </pre>
 			 */
-			return function(name, locals) {
+			var $component = function(name, locals) {
 				var componentSettings = null;
 
 				if (angular.isString(name)) {
@@ -286,6 +287,14 @@ flo.provider('$component', ['$injector', function($injector) {
 
 				return component;
 			}
+
+			$component.register = $componentProvider.register;
+
+			$component.names = function () {
+				return Object.keys(components);
+			};
+
+			return $component;
 		}
 
 	}
@@ -915,6 +924,7 @@ flo.directive('floNetwork', ['$network', '$http', '$sce', function($network, $ht
 	}
 }]);
 
+var fbpParser;
 angular.element(document).find('head').prepend('<style type="text/css">@charset "UTF-8";flo-network,[flo\\:network],[flo-network],[data-flo-network],[x-flo-network],.flo-network,.x-flo-network{display:none !important;}</style>');
 ;fbpParser = (function(){
   /*

@@ -138,6 +138,27 @@ describe('$component', function () {
 			});
 		});
 
+		it('should expose the register method from $component', function() {
+			var componentProvider;
+			module(function ($componentProvider) {
+				componentProvider = $componentProvider;
+			});
+			inject(function($component) {
+				expect($component.register).toEqual(componentProvider.register);
+			});
+		});
+
+		it('should provide a list of registered components with `name` methods', function() {
+			module(function ($componentProvider) {
+				$componentProvider.register('comp1', function(){});
+				$componentProvider.register('comp2', function(){});
+			});
+			inject(function($component) {
+				expect(angular.isFunction($component.names)).toBeTruthy();
+				expect($component.names()).toEqual(['comp1', 'comp2']);
+			});
+		});
+
 	});
 
 	describe('transformer', function() {

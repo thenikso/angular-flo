@@ -57,6 +57,8 @@
 	})
 
 	.controller('Ctrl', function($scope, $component, $network) {
+		console.log($component.names());
+
 		$component('mycomp')($scope, { noInhibition:true });
 		// var c = $component('mycomp')($scope);
 		// console.log(c('asdf'));
