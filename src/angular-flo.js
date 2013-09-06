@@ -35,6 +35,8 @@ flo.provider('$component', ['$injector', function($injector) {
 		 * 				* `outs`: see the `outs` parameter;
 		 * 				* `transformer`: see the `transformer` parameter;
 		 * 				* `compile`: an injectable function that should return a transformer function.
+		 * 					Besides regular AngularJS injection, a `parameters` object can be injected and it
+		 * 					will receive the parameters specified when a component is retrieved.
 		 *
 		 * @param {Array|Function} ins If called with a function, it is considered then
 		 * 		it is considered the transformer function, in which case the input port
@@ -127,7 +129,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			 * 		Otherwise it's considered to be a string which is used to retrieve
 			 * 		the component constructor registered via `$componentProvider`.
 			 *
-			 * @param {Object} locals Injection locals for the `compile` function of
+			 * @param {Object} parameters Injection parameters for the `compile` function of
 			 * 		the registered controller. If `name` is a funciton than this object
 			 * 		is instead considered as the `outs` array for the anonymous component.
 			 * @return {Function} A function that can be used to attach the controller
@@ -174,7 +176,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			 * 	}});
 			 * </pre>
 			 */
-			var $component = function(name, locals) {
+			var $component = function(name, parameters) {
 				var componentSettings = null;
 
 				if (angular.isString(name)) {
@@ -183,8 +185,8 @@ flo.provider('$component', ['$injector', function($injector) {
 					componentSettings = {};
 					componentSettings.transformer = name;
 					componentSettings.ins = validateComponentPorts($injector.annotate(name));
-					componentSettings.outs = validateComponentPorts(locals);
-					locals = null;
+					componentSettings.outs = validateComponentPorts(parameters);
+					parameters = null;
 				}
 
 				if (!angular.isObject(componentSettings)) {
@@ -193,7 +195,7 @@ flo.provider('$component', ['$injector', function($injector) {
 
 				var transformer = componentSettings.transformer;
 				if (angular.isFunction(componentSettings.compile)) {
-					transformer = $injector.invoke(componentSettings.compile, componentSettings, locals);
+					transformer = $injector.invoke(componentSettings.compile, componentSettings, { parameters: parameters || {} });
 				}
 
 				if (!angular.isFunction(transformer)) {
