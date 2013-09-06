@@ -8,7 +8,7 @@ function getNewScope() {
 	return scope;
 }
 
-describe('$controller', function () {
+describe('$component', function () {
 
 	beforeEach(module('ngFlo'));
 
