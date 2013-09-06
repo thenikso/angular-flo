@@ -97,7 +97,7 @@ describe('$component', function () {
 					'test2': {
 						ins: [{name:'testin', validate:'number'}, {name:'testin2', validate:'all'}],
 						outs: [{name:'testout', validate:'string'}, 'testout2'],
-						compile: function() {}
+						compile: function($q) { return function() {} }
 					}
 				});
 			});

@@ -115,7 +115,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			return this;
 		};
 
-		this.$get = function () {
+		this.$get = ['$injector', function ($injector) {
 
 			/**
 			 * @ngdoc function
@@ -194,7 +194,10 @@ flo.provider('$component', ['$injector', function($injector) {
 				var transformer = componentSettings.transformer;
 				if (angular.isFunction(componentSettings.compile)) {
 					transformer = $injector.invoke(componentSettings.compile, componentSettings, locals);
-					// TODO throw if transformer is not a function
+				}
+
+				if (!angular.isFunction(transformer)) {
+					throw "$component: Invalid transformer: " + transformer;
 				}
 
 				var component = function(scope, options) {
@@ -295,7 +298,7 @@ flo.provider('$component', ['$injector', function($injector) {
 			};
 
 			return $component;
-		}
+		}]
 
 	}
 
