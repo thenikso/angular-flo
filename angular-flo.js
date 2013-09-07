@@ -214,7 +214,7 @@ flo.provider('$component', ['$injector', function($injector) {
 					// properties changes in the scope (but only if the instance is not inhibited).
 					function componentInstance() {
 						var ins = validateInput(instanceIns, arguments);
-						var outs = transformer.apply(componentInstance, ins);
+						var outs = transformer.apply(scope, ins);
 						return validateAndAliasOutput(component.outs, outs, options.portsAlias);
 					};
 

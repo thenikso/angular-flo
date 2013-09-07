@@ -243,7 +243,9 @@ describe('$component', function () {
 					if (other) return other;
 					if (input) return input.toUpperCase();
 				};
+				test.context = null;
 				test.comp = getComponent('comp', function(input, other) {
+						test.context = this;
 						return test.trans(input, other);
 					}, ['output']);
 				test.scope = getNewScope();
@@ -254,6 +256,12 @@ describe('$component', function () {
 			afterEach(function() {
 				test.scope.$destroy();
 				test = null;
+			});
+
+			it('should receive the scope as this parameter', function() {
+				test.inst = test.comp(test.scope);
+				test.inst('a', 'b');
+				expect(test.context).toEqual(test.scope);
 			});
 
 			it('should insert and remove iself from the scope', function() {
